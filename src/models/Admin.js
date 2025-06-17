@@ -332,10 +332,18 @@ const adminSchema = new mongoose.Schema({
     virtuals: true,
     transform: function(doc, ret) {
       delete ret.password;
-      delete ret.authentication.refreshTokens;
-      delete ret.authentication.passwordResetToken;
-      delete ret.authentication.twoFactorSecret;
-      delete ret.inviteToken;
+      if (ret.authentication && ret.authentication.refreshTokens) {
+        delete ret.authentication.refreshTokens;
+      }
+      if (ret.authentication && ret.authentication.passwordResetToken) {
+        delete ret.authentication.passwordResetToken;
+      }
+      if (ret.authentication && ret.authentication.twoFactorSecret) {
+        delete ret.authentication.twoFactorSecret;
+      }
+      if (ret.inviteToken) {
+        delete ret.inviteToken;
+      }
       return ret;
     }
   },

@@ -372,6 +372,90 @@ const requireEmailVerification = (req, res, next) => {
   next();
 };
 
+/**
+ * Generic user rate limiter middleware.
+ * @param {number} maxAttempts - Maximum attempts allowed.
+ * @param {number} windowMs - Time window in ms.
+ */
+const userRateLimit = (maxAttempts, windowMs) => {
+  return (req, res, next) => {
+    if (!req.app.locals.userRateLimits) {
+      req.app.locals.userRateLimits = {};
+    }
+    const key = `${req.ip}_${req.originalUrl}`;
+    const now = Date.now();
+    let entry = req.app.locals.userRateLimits[key];
+    if (!entry || now > entry.resetTime) {
+      entry = { count: 0, resetTime: now + windowMs };
+    }
+    if (entry.count >= maxAttempts) {
+      logger.logSecurity('RATE_LIMIT', `Too many requests for ${req.originalUrl}`, req.ip);
+      return next(new AppError('Too many requests. Please try again later.', 429, 'TOO_MANY_REQUESTS'));
+    }
+    entry.count++;
+    req.app.locals.userRateLimits[key] = entry;
+    next();
+  };
+};
+
+/**
+ * Middleware to authenticate refresh tokens.
+ */
+const refreshTokenAuth = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return next(new AppError('Refresh token is required', 400, 'REFRESH_TOKEN_REQUIRED'));
+    }
+    const decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
+    let user;
+    if (decoded.userType === 'startup') {
+      user = await Startup.findById(decoded.id);
+    } else if (decoded.userType === 'admin') {
+      user = await Admin.findById(decoded.id);
+    }
+    if (!user) {
+      return next(new AppError('User not found', 401, 'USER_NOT_FOUND'));
+    }
+    req.user = user;
+    req.userType = decoded.userType;
+    req.refreshToken = refreshToken;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * General token generator for any user type.
+ */
+const generateTokens = (userId, userType = 'startup') => {
+  const payload = { id: userId, userType };
+  const accessToken = generateToken(
+    payload,
+    process.env.JWT_SECRET,
+    process.env.JWT_EXPIRE || '15m'
+  );
+  const refreshToken = generateToken(
+    payload,
+    process.env.JWT_REFRESH_SECRET,
+    process.env.JWT_REFRESH_EXPIRE || '7d'
+  );
+  return { accessToken, refreshToken };
+};
+
+/**
+ * Middleware to require verification of a field (email/phone).
+ */
+const requireVerification = (field) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.verification || !req.user.verification[field] || !req.user.verification[field].isVerified) {
+      return next(new AppError(`Please verify your ${field} first`, 403, `${field.toUpperCase()}_VERIFICATION_REQUIRED`));
+    }
+    next();
+  };
+};
+
 module.exports = {
   generateStartupTokens,
   generateAdminTokens,
@@ -386,5 +470,9 @@ module.exports = {
   validateRefreshToken,
   loginRateLimit,
   requireOnboarding,
-  requireEmailVerification
+  requireEmailVerification,
+  userRateLimit,
+  refreshTokenAuth,
+  generateTokens,
+  requireVerification
 };

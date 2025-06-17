@@ -23,7 +23,7 @@ const connectDB = async () => {
       family: 4, // Use IPv4, skip trying IPv6
       
       // Buffering settings
-      bufferMaxEntries: 0, // Disable mongoose buffering
+      // bufferMaxEntries: 0, // Disable mongoose buffering
       bufferCommands: false, // Disable mongoose buffering
       
       // Database settings

@@ -5,8 +5,13 @@ const questionnaireSchema = new mongoose.Schema({
   startupId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Startup',
-    required: [true, 'Startup ID is required'],
+    required: false, // Make optional for anonymous submission
     index: true
+  },
+  temporaryId: {
+    type: String,
+    index: true,
+    sparse: true
   },
   
   // Basic Information Step
@@ -80,7 +85,8 @@ const questionnaireSchema = new mongoose.Schema({
         'Business Plan',
         'Funding Strategy',
         'Go-to-Market Strategy',
-        'Team Building'
+        'Team Building',
+        'build-mvp'
       ]
     }],
     customMilestone: {
@@ -175,7 +181,7 @@ const questionnaireSchema = new mongoose.Schema({
   // Status and workflow
   status: {
     type: String,
-    enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'revision_requested'],
+    enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'revision_requested', 'sprint_created'],
     default: 'draft',
     index: true
   },

@@ -4,202 +4,12 @@ const Task = require('../models/Task');
 const Board = require('../models/Board');
 const { AppError } = require('../middleware/errorHandler');
 const { authenticateAdmin } = require('../middleware/auth');
-const { validateInput } = require('../utils/validation');
+const { validate } = require('../utils/validation');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 
-// Validation schemas
-const createTaskSchema = {
-  title: {
-    required: true,
-    type: 'string',
-    minLength: 3,
-    maxLength: 200,
-    message: 'Task title is required (3-200 characters)'
-  },
-  description: {
-    required: false,
-    type: 'string',
-    maxLength: 5000,
-    message: 'Description cannot exceed 5000 characters'
-  },
-  boardId: {
-    required: true,
-    type: 'string',
-    message: 'Board ID is required'
-  },
-  columnId: {
-    required: true,
-    type: 'string',
-    message: 'Column ID is required'
-  },
-  assigneeId: {
-    required: false,
-    type: 'string',
-    message: 'Assignee ID must be a valid string'
-  },
-  priority: {
-    required: false,
-    type: 'string',
-    enum: ['low', 'medium', 'high', 'critical'],
-    message: 'Valid priority is required'
-  },
-  dueDate: {
-    required: false,
-    type: 'string',
-    message: 'Due date must be a valid date string'
-  },
-  estimatedHours: {
-    required: false,
-    type: 'number',
-    min: 0,
-    message: 'Estimated hours must be a positive number'
-  },
-  tags: {
-    required: false,
-    type: 'array',
-    message: 'Tags must be an array'
-  }
-};
-
-const updateTaskSchema = {
-  title: {
-    required: false,
-    type: 'string',
-    minLength: 3,
-    maxLength: 200,
-    message: 'Task title must be 3-200 characters'
-  },
-  description: {
-    required: false,
-    type: 'string',
-    maxLength: 5000,
-    message: 'Description cannot exceed 5000 characters'
-  },
-  status: {
-    required: false,
-    type: 'string',
-    enum: ['todo', 'in_progress', 'in_review', 'testing', 'completed', 'cancelled'],
-    message: 'Valid status is required'
-  },
-  priority: {
-    required: false,
-    type: 'string',
-    enum: ['low', 'medium', 'high', 'critical'],
-    message: 'Valid priority is required'
-  },
-  assigneeId: {
-    required: false,
-    type: 'string',
-    message: 'Assignee ID must be a valid string'
-  },
-  dueDate: {
-    required: false,
-    type: 'string',
-    message: 'Due date must be a valid date string'
-  },
-  estimatedHours: {
-    required: false,
-    type: 'number',
-    min: 0,
-    message: 'Estimated hours must be a positive number'
-  },
-  progress: {
-    required: false,
-    type: 'number',
-    min: 0,
-    max: 100,
-    message: 'Progress must be between 0 and 100'
-  }
-};
-
-const moveTaskSchema = {
-  columnId: {
-    required: true,
-    type: 'string',
-    message: 'Column ID is required'
-  },
-  position: {
-    required: true,
-    type: 'number',
-    min: 0,
-    message: 'Position must be a non-negative number'
-  }
-};
-
-const addCommentSchema = {
-  content: {
-    required: true,
-    type: 'string',
-    minLength: 1,
-    maxLength: 2000,
-    message: 'Comment content is required (1-2000 characters)'
-  },
-  isInternal: {
-    required: false,
-    type: 'boolean',
-    message: 'isInternal must be a boolean'
-  }
-};
-
-const logTimeSchema = {
-  hours: {
-    required: true,
-    type: 'number',
-    min: 0.1,
-    max: 24,
-    message: 'Hours must be between 0.1 and 24'
-  },
-  description: {
-    required: true,
-    type: 'string',
-    minLength: 3,
-    maxLength: 500,
-    message: 'Time log description is required (3-500 characters)'
-  },
-  logDate: {
-    required: false,
-    type: 'string',
-    message: 'Log date must be a valid date string'
-  }
-};
-
-// Helper function to check task access
-async function checkTaskAccess(taskId, userId, accessType = 'read') {
-  const task = await Task.findById(taskId).populate('boardId');
-  
-  if (!task) {
-    throw new AppError('Task not found', 404, 'TASK_NOT_FOUND');
-  }
-  
-  const board = task.boardId;
-  
-  // Check board access
-  const hasAccess = board.visibility === 'public' ||
-                   board.createdBy.toString() === userId.toString() ||
-                   board.permissions.users.some(u => u.userId.toString() === userId.toString());
-  
-  if (!hasAccess) {
-    throw new AppError('You do not have access to this task', 403, 'TASK_ACCESS_DENIED');
-  }
-  
-  // For write access, check additional permissions
-  if (accessType === 'write') {
-    const hasEditAccess = board.createdBy.toString() === userId.toString() ||
-                         board.permissions.users.some(u => 
-                           u.userId.toString() === userId.toString() && 
-                           ['admin', 'editor'].includes(u.role)
-                         ) ||
-                         task.assigneeId?.toString() === userId.toString();
-    
-    if (!hasEditAccess) {
-      throw new AppError('You do not have permission to edit this task', 403, 'TASK_EDIT_DENIED');
-    }
-  }
-  
-  return task;
-}
+const Joi = require('joi');
 
 // ==================== TASK CRUD OPERATIONS ====================
 
@@ -292,12 +102,12 @@ router.get('/', authenticateAdmin, async (req, res, next) => {
           updatedAt: task.updatedAt,
           dueDate: task.dueDate,
           estimatedHours: task.estimatedHours,
-          actualHours: task.timeTracking.totalHours,
+          actualHours: task.timeTracking?.totalHours,
           progress: task.progress,
           tags: task.tags,
           watchers: task.watchers,
-          commentsCount: task.comments.length,
-          attachmentsCount: task.attachments.length,
+          commentsCount: task.comments?.length || 0,
+          attachmentsCount: task.attachments?.length || 0,
           isOverdue: task.dueDate && task.dueDate < new Date() && !['completed', 'cancelled'].includes(task.status)
         })),
         pagination: {
@@ -319,9 +129,7 @@ router.get('/', authenticateAdmin, async (req, res, next) => {
 // @access  Private (Admin)
 router.get('/:id', authenticateAdmin, async (req, res, next) => {
   try {
-    const task = await checkTaskAccess(req.params.id, req.user._id, 'read');
-    
-    const populatedTask = await Task.findById(req.params.id)
+    const task = await Task.findById(req.params.id)
       .populate('boardId', 'name columns')
       .populate('assigneeId', 'profile.firstName profile.lastName profile.avatar profile.department')
       .populate('createdBy', 'profile.firstName profile.lastName')
@@ -330,40 +138,44 @@ router.get('/:id', authenticateAdmin, async (req, res, next) => {
       .populate('subtasks.assigneeId', 'profile.firstName profile.lastName')
       .populate('timeTracking.logs.loggedBy', 'profile.firstName profile.lastName');
     
+    if (!task) {
+      return next(new AppError('Task not found', 404, 'TASK_NOT_FOUND'));
+    }
+    
     res.json({
       success: true,
       data: {
         task: {
-          id: populatedTask._id,
-          title: populatedTask.title,
-          description: populatedTask.description,
-          status: populatedTask.status,
-          priority: populatedTask.priority,
-          board: populatedTask.boardId,
-          columnId: populatedTask.columnId,
-          position: populatedTask.position,
-          assignee: populatedTask.assigneeId,
-          createdBy: populatedTask.createdBy,
-          createdAt: populatedTask.createdAt,
-          updatedAt: populatedTask.updatedAt,
-          dueDate: populatedTask.dueDate,
-          completedAt: populatedTask.completedAt,
-          estimatedHours: populatedTask.estimatedHours,
-          progress: populatedTask.progress,
-          tags: populatedTask.tags,
-          watchers: populatedTask.watchers,
-          subtasks: populatedTask.subtasks,
-          comments: populatedTask.comments.filter(comment => 
+          id: task._id,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          board: task.boardId,
+          columnId: task.columnId,
+          position: task.position,
+          assignee: task.assigneeId,
+          createdBy: task.createdBy,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+          dueDate: task.dueDate,
+          completedAt: task.completedAt,
+          estimatedHours: task.estimatedHours,
+          progress: task.progress,
+          tags: task.tags,
+          watchers: task.watchers,
+          subtasks: task.subtasks,
+          comments: task.comments?.filter(comment => 
             !comment.isInternal || req.user.role === 'super_admin' || 
-            populatedTask.boardId.createdBy.toString() === req.user._id.toString()
+            task.boardId.createdBy.toString() === req.user._id.toString()
           ),
-          attachments: populatedTask.attachments,
-          timeTracking: populatedTask.timeTracking,
-          activityLog: populatedTask.activityLog.slice(-20), // Last 20 activities
-          dependencies: populatedTask.dependencies,
-          customFields: populatedTask.customFields,
-          isOverdue: populatedTask.dueDate && populatedTask.dueDate < new Date() && 
-                    !['completed', 'cancelled'].includes(populatedTask.status)
+          attachments: task.attachments,
+          timeTracking: task.timeTracking,
+          activityLog: task.activityLog?.slice(-20), // Last 20 activities
+          dependencies: task.dependencies,
+          customFields: task.customFields,
+          isOverdue: task.dueDate && task.dueDate < new Date() && 
+                    !['completed', 'cancelled'].includes(task.status)
         }
       }
     });
@@ -376,7 +188,29 @@ router.get('/:id', authenticateAdmin, async (req, res, next) => {
 // @route   POST /api/tasks
 // @desc    Create new task
 // @access  Private (Admin)
-router.post('/', authenticateAdmin, validateInput(createTaskSchema), async (req, res, next) => {
+router.post('/', authenticateAdmin, validate(Joi.object({
+  title: Joi.string().min(3).max(200).required(),
+  description: Joi.string().max(5000).optional(),
+  boardId: Joi.string().required(),
+  columnId: Joi.string().required(),
+  assigneeId: Joi.string().optional(),
+  priority: Joi.string().valid('low', 'medium', 'high', 'critical').optional(),
+  dueDate: Joi.string().optional(),
+  estimatedHours: Joi.number().min(0).optional(),
+  tags: Joi.array().optional(),
+  taskType: Joi.string().valid(
+    'development', 'design', 'research', 'testing', 'bug', 'feature', 'documentation', 'meeting', 'milestone', 'review'
+  ).required(),
+  status: Joi.string().optional(),
+  watchers: Joi.array().items(
+    Joi.object({
+      userId: Joi.string().required(),
+      userModel: Joi.string().valid('Admin', 'Startup').required(),
+      addedAt: Joi.date().optional()
+    })
+  ).optional(),
+  createdByModel: Joi.string().valid('Admin', 'Startup').optional()
+})), async (req, res, next) => {
   try {
     const {
       title,
@@ -387,9 +221,12 @@ router.post('/', authenticateAdmin, validateInput(createTaskSchema), async (req,
       priority = 'medium',
       dueDate,
       estimatedHours,
-      tags = []
+      tags = [],
+      taskType,
+      status,
+      watchers = [],
+      createdByModel
     } = req.body;
-    
     // Validate board and column
     const board = await Board.findById(boardId);
     if (!board) {
@@ -439,28 +276,35 @@ router.post('/', authenticateAdmin, validateInput(createTaskSchema), async (req,
         color: tag.color || '#e3f2fd'
       })),
       createdBy: req.user._id,
-      status: getStatusFromColumn(column),
+      createdByModel: createdByModel || "Admin",
+      status: status || getStatusFromColumn(column),
       activityLog: [{
         action: 'created',
         description: 'Task created',
         userId: req.user._id,
         timestamp: new Date()
-      }]
+      }],
+      taskType,
+      watchers: Array.isArray(watchers) && watchers.length > 0 ? watchers : []
     });
     
-    // Add assignee as watcher if assigned
-    if (assigneeId) {
+    // Add assignee as watcher if assigned and not already in watchers
+    if (assigneeId && !task.watchers.some(w => w.userId?.toString() === assigneeId)) {
       task.watchers.push({
         userId: assigneeId,
+        userModel: "Admin",
         addedAt: new Date()
       });
     }
     
-    // Add creator as watcher
-    task.watchers.push({
-      userId: req.user._id,
-      addedAt: new Date()
-    });
+    // Add creator as watcher if not already in watchers
+    if (!task.watchers.some(w => w.userId?.toString() === req.user._id.toString())) {
+      task.watchers.push({
+        userId: req.user._id,
+        userModel: "Admin",
+        addedAt: new Date()
+      });
+    }
     
     await task.save();
     
@@ -469,12 +313,6 @@ router.post('/', authenticateAdmin, validateInput(createTaskSchema), async (req,
       .populate('boardId', 'name')
       .populate('assigneeId', 'profile.firstName profile.lastName profile.avatar')
       .populate('createdBy', 'profile.firstName profile.lastName');
-    
-    logger.logInfo(`Task created by admin ${req.user._id}`, {
-      taskId: task._id,
-      boardId: boardId,
-      title: title
-    });
     
     res.status(201).json({
       success: true,
@@ -507,9 +345,33 @@ router.post('/', authenticateAdmin, validateInput(createTaskSchema), async (req,
 // @route   PUT /api/tasks/:id
 // @desc    Update task
 // @access  Private (Admin)
-router.put('/:id', authenticateAdmin, validateInput(updateTaskSchema), async (req, res, next) => {
+router.put('/:id', authenticateAdmin, validate(Joi.object({
+  title: Joi.string().min(3).max(200).optional(),
+  description: Joi.string().max(5000).optional(),
+  status: Joi.string().valid('todo', 'in_progress', 'in_review', 'testing', 'completed', 'cancelled').optional(),
+  priority: Joi.string().valid('low', 'medium', 'high', 'critical').optional(),
+  assigneeId: Joi.string().optional(),
+  dueDate: Joi.string().optional(),
+  estimatedHours: Joi.number().min(0).optional(),
+  progress: Joi.number().min(0).max(100).optional(),
+  tags: Joi.array().optional(),
+  taskType: Joi.string().valid(
+    'development', 'design', 'research', 'testing', 'bug', 'feature', 'documentation', 'meeting', 'milestone', 'review'
+  ).optional(),
+  watchers: Joi.array().items(
+    Joi.object({
+      userId: Joi.string().required(),
+      userModel: Joi.string().valid('Admin', 'Startup').required(),
+      addedAt: Joi.date().optional()
+    })
+  ).optional(),
+  createdByModel: Joi.string().valid('Admin', 'Startup').optional()
+})), async (req, res, next) => {
   try {
-    const task = await checkTaskAccess(req.params.id, req.user._id, 'write');
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return next(new AppError('Task not found', 404, 'TASK_NOT_FOUND'));
+    }
     
     const {
       title,
@@ -520,7 +382,10 @@ router.put('/:id', authenticateAdmin, validateInput(updateTaskSchema), async (re
       dueDate,
       estimatedHours,
       progress,
-      tags
+      tags,
+      taskType,
+      watchers,
+      createdByModel
     } = req.body;
     
     const oldValues = {
@@ -547,6 +412,9 @@ router.put('/:id', authenticateAdmin, validateInput(updateTaskSchema), async (re
         color: tag.color || '#e3f2fd'
       }));
     }
+    if (taskType !== undefined) task.taskType = taskType;
+    if (watchers !== undefined) task.watchers = watchers;
+    if (createdByModel !== undefined) task.createdByModel = createdByModel;
     
     // Handle status change
     if (status !== undefined && status !== task.status) {
@@ -591,6 +459,7 @@ router.put('/:id', authenticateAdmin, validateInput(updateTaskSchema), async (re
         if (!isWatching) {
           task.watchers.push({
             userId: assigneeId,
+            userModel: "Admin",
             addedAt: new Date()
           });
         }
@@ -643,11 +512,6 @@ router.put('/:id', authenticateAdmin, validateInput(updateTaskSchema), async (re
       .populate('assigneeId', 'profile.firstName profile.lastName profile.avatar')
       .populate('createdBy', 'profile.firstName profile.lastName');
     
-    logger.logInfo(`Task updated by admin ${req.user._id}`, {
-      taskId: task._id,
-      changes: changes
-    });
-    
     res.json({
       success: true,
       message: 'Task updated successfully',
@@ -673,143 +537,15 @@ router.put('/:id', authenticateAdmin, validateInput(updateTaskSchema), async (re
   }
 });
 
-// @route   POST /api/tasks/:id/move
-// @desc    Move task to different column/position
-// @access  Private (Admin)
-router.post('/:id/move', authenticateAdmin, validateInput(moveTaskSchema), async (req, res, next) => {
-  try {
-    const task = await checkTaskAccess(req.params.id, req.user._id, 'write');
-    const { columnId, position } = req.body;
-    
-    // Validate column exists in board
-    const board = await Board.findById(task.boardId);
-    const targetColumn = board.columns.id(columnId);
-    if (!targetColumn) {
-      return next(new AppError('Target column not found', 404, 'COLUMN_NOT_FOUND'));
-    }
-    
-    const oldColumnId = task.columnId;
-    const oldPosition = task.position;
-    
-    // Update positions of other tasks
-    if (columnId === oldColumnId.toString()) {
-      // Moving within same column
-      if (position > oldPosition) {
-        // Moving down - decrement positions of tasks between old and new position
-        await Task.updateMany(
-          {
-            boardId: task.boardId,
-            columnId: columnId,
-            position: { $gt: oldPosition, $lte: position }
-          },
-          { $inc: { position: -1 } }
-        );
-      } else if (position < oldPosition) {
-        // Moving up - increment positions of tasks between new and old position
-        await Task.updateMany(
-          {
-            boardId: task.boardId,
-            columnId: columnId,
-            position: { $gte: position, $lt: oldPosition }
-          },
-          { $inc: { position: 1 } }
-        );
-      }
-    } else {
-      // Moving to different column
-      // Decrement positions in old column
-      await Task.updateMany(
-        {
-          boardId: task.boardId,
-          columnId: oldColumnId,
-          position: { $gt: oldPosition }
-        },
-        { $inc: { position: -1 } }
-      );
-      
-      // Increment positions in new column
-      await Task.updateMany(
-        {
-          boardId: task.boardId,
-          columnId: columnId,
-          position: { $gte: position }
-        },
-        { $inc: { position: 1 } }
-      );
-    }
-    
-    // Update task
-    task.columnId = columnId;
-    task.position = position;
-    task.status = getStatusFromColumn(targetColumn);
-    
-    // Log the move
-    task.activityLog.push({
-      action: 'moved',
-      description: `Moved to column: ${targetColumn.name}`,
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        oldColumnId: oldColumnId.toString(),
-        newColumnId: columnId,
-        oldPosition,
-        newPosition: position
-      }
-    });
-    
-    await task.save();
-    
-    logger.logInfo(`Task moved by admin ${req.user._id}`, {
-      taskId: task._id,
-      fromColumn: oldColumnId.toString(),
-      toColumn: columnId,
-      position
-    });
-    
-    res.json({
-      success: true,
-      message: 'Task moved successfully',
-      data: {
-        task: {
-          id: task._id,
-          columnId: task.columnId,
-          position: task.position,
-          status: task.status
-        }
-      }
-    });
-    
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Helper function to map column to status
-function getStatusFromColumn(column) {
-  const statusMap = {
-    'todo': 'todo',
-    'backlog': 'todo',
-    'in progress': 'in_progress',
-    'in-progress': 'in_progress',
-    'doing': 'in_progress',
-    'review': 'in_review',
-    'in review': 'in_review',
-    'testing': 'testing',
-    'done': 'completed',
-    'completed': 'completed',
-    'finished': 'completed'
-  };
-  
-  const columnName = column.name.toLowerCase();
-  return statusMap[columnName] || 'todo';
-}
-
 // @route   DELETE /api/tasks/:id
 // @desc    Delete (archive) task
 // @access  Private (Admin)
 router.delete('/:id', authenticateAdmin, async (req, res, next) => {
   try {
-    const task = await checkTaskAccess(req.params.id, req.user._id, 'write');
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return next(new AppError('Task not found', 404, 'TASK_NOT_FOUND'));
+    }
     
     // Check if user can delete (only creator or board admin)
     const board = await Board.findById(task.boardId);
@@ -847,16 +583,151 @@ router.delete('/:id', authenticateAdmin, async (req, res, next) => {
       { $inc: { position: -1 } }
     );
     
-    logger.logInfo(`Task archived by admin ${req.user._id}`, {
-      taskId: task._id,
-      boardId: task.boardId
-    });
-    
     res.json({
       success: true,
       message: 'Task archived successfully'
     });
     
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==================== TASK MOVE ENDPOINT ====================
+
+// @route   POST /api/tasks/:id/move
+// @desc    Move task to different column/position
+// @access  Private (Admin)
+router.post('/:id/move', authenticateAdmin, validate(Joi.object({
+  columnId: Joi.string().required(),
+  position: Joi.number().min(0).required()
+})), async (req, res, next) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return next(new AppError('Task not found', 404, 'TASK_NOT_FOUND'));
+    }
+
+    const board = await Board.findById(task.boardId);
+    if (!board) {
+      return next(new AppError('Board not found', 404, 'BOARD_NOT_FOUND'));
+    }
+
+    const { columnId, position } = req.body;
+
+    // Validate column exists in board
+    const targetColumn = board.columns.id(columnId);
+    if (!targetColumn) {
+      return next(new AppError('Target column not found', 404, 'COLUMN_NOT_FOUND'));
+    }
+
+    const oldColumnId = task.columnId.toString();
+    const oldPosition = task.position;
+
+    // Update positions of other tasks
+    if (columnId === oldColumnId) {
+      // Moving within same column
+      if (position > oldPosition) {
+        // Moving down - decrement positions of tasks between old and new position
+        await Task.updateMany(
+          {
+            boardId: task.boardId,
+            columnId: columnId,
+            position: { $gt: oldPosition, $lte: position }
+          },
+          { $inc: { position: -1 } }
+        );
+      } else if (position < oldPosition) {
+        // Moving up - increment positions of tasks between new and old position
+        await Task.updateMany(
+          {
+            boardId: task.boardId,
+            columnId: columnId,
+            position: { $gte: position, $lt: oldPosition }
+          },
+          { $inc: { position: 1 } }
+        );
+      }
+    } else {
+      // Moving to different column
+      // Decrement positions in old column
+      await Task.updateMany(
+        {
+          boardId: task.boardId,
+          columnId: oldColumnId,
+          position: { $gt: oldPosition }
+        },
+        { $inc: { position: -1 } }
+      );
+
+      // Increment positions in new column
+      await Task.updateMany(
+        {
+          boardId: task.boardId,
+          columnId: columnId,
+          position: { $gte: position }
+        },
+        { $inc: { position: 1 } }
+      );
+    }
+
+    // Update task
+    task.columnId = columnId;
+    task.position = position;
+    // Optionally update status based on column name
+    // Use only valid Task status enums: ['todo', 'in_progress', 'review', 'done', 'blocked']
+    const statusMap = {
+      'todo': 'todo',
+      'backlog': 'todo',
+      'in progress': 'in_progress',
+      'in-progress': 'in_progress',
+      'doing': 'in_progress',
+      'review': 'review',
+      'in review': 'review',
+      'blocked': 'blocked',
+      'done': 'done',
+      'completed': 'done',
+      'finished': 'done'
+    };
+    const columnName = targetColumn.name.toLowerCase();
+    task.status = statusMap[columnName] || task.status;
+
+    // Log the move
+    if (!task.activityLog) task.activityLog = [];
+    task.activityLog.push({
+      action: 'moved',
+      description: `Moved to column: ${targetColumn.name}`,
+      userId: req.user._id,
+      timestamp: new Date(),
+      metadata: {
+        oldColumnId: oldColumnId,
+        newColumnId: columnId,
+        oldPosition,
+        newPosition: position
+      }
+    });
+
+    await task.save();
+
+    // logger.logInfo(`Task moved by admin ${req.user._id}`, {
+    //   taskId: task._id,
+    //   fromColumn: oldColumnId,
+    //   toColumn: columnId,
+    //   position
+    // });
+
+    res.json({
+      success: true,
+      message: 'Task moved successfully',
+      data: {
+        task: {
+          id: task._id,
+          columnId: task.columnId,
+          position: task.position,
+          status: task.status
+        }
+      }
+    });
   } catch (error) {
     next(error);
   }
