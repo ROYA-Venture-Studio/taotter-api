@@ -9,26 +9,42 @@ const compression = require('compression');
 const morgan = require('morgan');
 require('dotenv').config();
 
-const connectDB = require('./config/database');
-const connectRedis = require('./config/redis');
+const { connectDB } = require('./config/database'); // FIXED: use destructuring to get connectDB
+// const connectRedis = require('./config/redis');
 const logger = require('./utils/logger');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const socketManager = require('./utils/socketManager');
+const { Server } = require('socket.io');
 
 // Import routes
 const startupAuthRoutes = require('./routes/startupAuth');
 const adminAuthRoutes = require('./routes/adminAuth');
+const adminRoutes = require('./routes/admin');
+const authRoutes = require('./routes/auth');
+const questionnairesRoutes = require('./routes/questionnaires');
+const sprintsRoutes = require('./routes/sprints');
+const boardsRoutes = require('./routes/boards');
+const tasksRoutes = require('./routes/tasks');
+const taskCollaborationRoutes = require('./routes/task-collaboration');
+const chatRoutes = require('./routes/chat');
+const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
 
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
 
+let mongoConnected = false;
+
 // Connect to MongoDB
-connectDB();
+connectDB().then(() => {
+  mongoConnected = true;
+  // Initialize Socket.IO only after DB is ready
+  startSocketServer();
+});
 
 // Connect to Redis
-connectRedis();
+// connectRedis();
 
 // Security middleware
 app.use(helmet({
@@ -153,6 +169,15 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/startup/auth', startupAuthRoutes);
 app.use('/api/admin/auth', adminAuthRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/questionnaires', questionnairesRoutes);
+app.use('/api/sprints', sprintsRoutes);
+app.use('/api/boards', boardsRoutes);
+app.use('/api/tasks', tasksRoutes);
+app.use('/api/task-collaboration', taskCollaborationRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // API base route
 app.get('/api', (req, res) => {
@@ -165,10 +190,10 @@ app.get('/api', (req, res) => {
 });
 
 // Catch unhandled routes
-app.use(notFound);
+// app.use(notFound);
 
 // Global error handler
-app.use(errorHandler);
+// app.use(errorHandler);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
@@ -186,19 +211,19 @@ process.on('uncaughtException', (err) => {
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  logger.logInfo('SIGTERM received. Shutting down gracefully...');
+  logger.info('SIGTERM received. Shutting down gracefully...');
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  logger.logInfo('SIGINT received. Shutting down gracefully...');
+  logger.info('SIGINT received. Shutting down gracefully...');
   process.exit(0);
 });
 
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
-  logger.logInfo(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔌 API: http://localhost:${PORT}/api`);
@@ -209,29 +234,23 @@ const server = app.listen(PORT, () => {
   }
 });
 
-// Initialize Socket.IO
-const io = socketManager.initialize(server);
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  logger.logInfo(`Socket connected: ${socket.id}`);
-  
-  // Handle authentication
-  socket.on('authenticate', async (data) => {
-    try {
-      const { token, userType } = data;
-      // Implement socket authentication logic here
-      socket.emit('authenticated', { success: true });
-    } catch (error) {
-      socket.emit('authentication_error', { error: error.message });
+// Socket.IO initialization after DB connection
+function startSocketServer() {
+  const { Server } = require('socket.io');
+  const io = new Server(server, {
+    cors: {
+      origin: [
+        process.env.FRONTEND_URL,
+        process.env.ADMIN_FRONTEND_URL,
+        'http://localhost:3000',
+        'http://localhost:3001'
+      ].filter(Boolean),
+      credentials: true
     }
   });
-  
-  // Handle disconnection
-  socket.on('disconnect', (reason) => {
-    logger.logInfo(`Socket disconnected: ${socket.id}, reason: ${reason}`);
-  });
-});
+  socketManager.initializeSocketIO(io);
+  app.set('io', io);
+}
 
 // Export for testing
 module.exports = { app, server };

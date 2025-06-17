@@ -207,7 +207,18 @@ const startupSchema = new mongoose.Schema({
     },
     currentStep: {
       type: String,
-      enum: ['profile', 'questionnaire', 'verification', 'completed'],
+      enum: [
+        'profile',
+        'questionnaire',
+        'pending_review',
+        'sprint_selection',
+        'sprint_onboarding',
+        'document_upload',
+        'meeting_scheduling',
+        'meeting_scheduled',
+        'active_sprint',
+        'completed'
+      ],
       default: 'profile'
     },
     completedAt: Date
@@ -265,10 +276,18 @@ const startupSchema = new mongoose.Schema({
     virtuals: true,
     transform: function(doc, ret) {
       delete ret.password;
-      delete ret.authentication.refreshTokens;
-      delete ret.verification.email.verificationToken;
-      delete ret.verification.phone.verificationCode;
-      delete ret.authentication.passwordResetToken;
+      if (ret.authentication && ret.authentication.refreshTokens) {
+        delete ret.authentication.refreshTokens;
+      }
+      if (ret.verification && ret.verification.email && ret.verification.email.verificationToken) {
+        delete ret.verification.email.verificationToken;
+      }
+      if (ret.verification && ret.verification.phone && ret.verification.phone.verificationCode) {
+        delete ret.verification.phone.verificationCode;
+      }
+      if (ret.authentication && ret.authentication.passwordResetToken) {
+        delete ret.authentication.passwordResetToken;
+      }
       return ret;
     }
   },

@@ -2,7 +2,7 @@ const express = require('express');
 const Task = require('../models/Task');
 const { AppError } = require('../middleware/errorHandler');
 const { authenticateAdmin } = require('../middleware/auth');
-const { validateInput } = require('../utils/validation');
+const { validate } = require('../utils/validation');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -117,7 +117,10 @@ async function checkTaskAccess(taskId, userId, accessType = 'read') {
 // @route   POST /api/tasks/:id/comments
 // @desc    Add comment to task
 // @access  Private (Admin)
-router.post('/:id/comments', authenticateAdmin, validateInput(addCommentSchema), async (req, res, next) => {
+router.post('/:id/comments', authenticateAdmin, validate(require('joi').object({
+  content: require('joi').string().min(1).max(2000).required(),
+  isInternal: require('joi').boolean().optional()
+})), async (req, res, next) => {
   try {
     const task = await checkTaskAccess(req.params.id, req.user._id, 'read');
     const { content, isInternal = false, mentions = [] } = req.body;
@@ -302,7 +305,7 @@ router.delete('/:id/comments/:commentId', authenticateAdmin, async (req, res, ne
 // @route   POST /api/tasks/:id/time-logs
 // @desc    Log time for task
 // @access  Private (Admin)
-router.post('/:id/time-logs', authenticateAdmin, validateInput(logTimeSchema), async (req, res, next) => {
+router.post('/:id/time-logs', authenticateAdmin, validate(logTimeSchema), async (req, res, next) => {
   try {
     const task = await checkTaskAccess(req.params.id, req.user._id, 'write');
     const { hours, description, logDate } = req.body;
@@ -457,7 +460,7 @@ router.delete('/:id/time-logs/:logId', authenticateAdmin, async (req, res, next)
 // @route   POST /api/tasks/:id/subtasks
 // @desc    Add subtask
 // @access  Private (Admin)
-router.post('/:id/subtasks', authenticateAdmin, validateInput(addSubtaskSchema), async (req, res, next) => {
+router.post('/:id/subtasks', authenticateAdmin, validate(addSubtaskSchema), async (req, res, next) => {
   try {
     const task = await checkTaskAccess(req.params.id, req.user._id, 'write');
     const { title, description, assigneeId, dueDate } = req.body;

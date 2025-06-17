@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 const logger = require('./logger');
-const User = require('../models/User');
+const Admin = require('../models/Admin');
+const Startup = require('../models/Startup');
+const Message = require('../models/Message');
+const Chat = require('../models/Chat');
 
 let io = null;
 const connectedUsers = new Map(); // userId -> socketId mapping
@@ -21,21 +24,26 @@ const initializeSocketIO = (socketIO) => {
       // Verify JWT token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      // Get user from database
-      const user = await User.findById(decoded.id).select('-password');
+      // Get user from Admin or Startup model
+      let user = await Admin.findById(decoded.id).select('-password');
+      let userType = 'admin';
+      if (!user) {
+        user = await Startup.findById(decoded.id).select('-password');
+        userType = 'startup';
+      }
       if (!user) {
         return next(new Error('Authentication error: User not found'));
       }
 
       // Attach user to socket
       socket.userId = user._id.toString();
-      socket.userRole = user.role;
+      socket.userRole = userType === 'admin' ? (user.role || 'admin') : 'startup';
       socket.userData = {
         id: user._id,
         email: user.email,
-        role: user.role,
-        firstName: user.profile?.firstName,
-        lastName: user.profile?.lastName
+        role: socket.userRole,
+        firstName: user.profile?.firstName || user.profile?.founderFirstName,
+        lastName: user.profile?.lastName || user.profile?.founderLastName
       };
 
       next();
@@ -88,28 +96,49 @@ const initializeSocketIO = (socketIO) => {
     socket.on('send_message', async (data) => {
       try {
         const { conversationId, content, messageType = 'text' } = data;
-        
-        // TODO: Validate and save message to database
-        // For now, just broadcast to conversation participants
-        
+
+        console.log('Socket send_message received:', { conversationId, content, userId });
+
+        // Validate conversation
+        const chat = await Chat.findById(conversationId);
+        if (!chat) {
+          socket.emit('error', { message: 'Conversation not found' });
+          return;
+        }
+
+        // Save message to database
+        const message = new Message({
+          chatId: conversationId,
+          senderType: socket.userRole === 'admin' || socket.userRole === 'super_admin' ? 'admin' : 'startup',
+          senderId: userId,
+          content,
+          messageType,
+          createdAt: new Date()
+        });
+        await message.save();
+
+        // Update chat lastMessageAt
+        await Chat.findByIdAndUpdate(conversationId, { lastMessageAt: new Date() });
+
         const messageData = {
-          id: Date.now(), // Temporary ID
+          _id: message._id,
           conversationId,
           senderId: userId,
+          senderType: message.senderType,
           senderName: `${socket.userData.firstName} ${socket.userData.lastName}`,
           content,
           messageType,
-          timestamp: new Date().toISOString()
+          createdAt: message.createdAt
         };
 
-        // Broadcast to conversation participants
-        socket.to(`conversation:${conversationId}`).emit('new_message', messageData);
-        
-        // Confirm message sent to sender
-        socket.emit('message_sent', { messageId: messageData.id });
-        
+        console.log('Broadcasting message to conversation:', conversationId, messageData);
+
+        // Broadcast to conversation participants (including sender for confirmation)
+        io.to(`conversation:${conversationId}`).emit('new_message', messageData);
+
         logger.logSocket('MESSAGE_SENT', userId, conversationId);
       } catch (error) {
+        console.error('Send message error:', error);
         logger.logError(error, 'Send Message');
         socket.emit('error', { message: 'Failed to send message' });
       }

@@ -84,7 +84,10 @@ const questionnaireSchemas = {
         'business-planning',
         'funding-preparation',
         'technical-consulting',
-        'custom'
+        'custom',
+        'idea',
+        'validation',
+        'growth'
       ).required(),
       taskDescription: Joi.string().trim().min(10).max(2000).required(),
       startupStage: Joi.string().valid(
@@ -111,10 +114,12 @@ const questionnaireSchemas = {
           'Business Plan',
           'Funding Strategy',
           'Go-to-Market Strategy',
-          'Team Building'
+          'Team Building',
+          'market-research',
+          'build-mvp'
         )
       ).optional(),
-      customMilestone: Joi.string().trim().max(500).optional(),
+      // customMilestone: Joi.string().trim().max(500).optional(),
       timeline: Joi.string().valid(
         '1-2 weeks',
         '3-4 weeks',
@@ -130,7 +135,7 @@ const questionnaireSchemas = {
         '$50,000 - $100,000',
         'Over $100,000'
       ).optional(),
-      additionalRequirements: Joi.string().trim().max(1000).optional()
+      // additionalRequirements: Joi.string().trim().max(1000).optional()
     }).optional(),
 
     serviceSelection: Joi.object({
@@ -182,7 +187,7 @@ const questionnaireSchemas = {
           'Team Building'
         )
       ).optional(),
-      customMilestone: Joi.string().trim().max(500).optional(),
+      // customMilestone: Joi.string().trim().max(500).optional(),
       timeline: Joi.string().valid(
         '1-2 weeks',
         '3-4 weeks',

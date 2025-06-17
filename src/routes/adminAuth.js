@@ -9,25 +9,13 @@ const {
   validateRefreshToken,
   loginRateLimit 
 } = require('../middleware/auth');
-const { validateInput } = require('../utils/validation');
+const { validate } = require('../utils/validation');
 const logger = require('../utils/logger');
 const { sendEmail } = require('../utils/communications');
 
 const router = express.Router();
 
-// Validation schemas
-const loginSchema = {
-  email: {
-    required: true,
-    type: 'email',
-    message: 'Valid email is required'
-  },
-  password: {
-    required: true,
-    type: 'string',
-    message: 'Password is required'
-  }
-};
+const { userSchemas } = require('../utils/validation');
 
 const createAdminSchema = {
   email: {
@@ -100,7 +88,7 @@ const inviteAdminSchema = {
 // @route   POST /api/admin/auth/login
 // @desc    Login admin
 // @access  Public
-router.post('/login', loginRateLimit, validateInput(loginSchema), async (req, res, next) => {
+router.post('/login', loginRateLimit, validate(userSchemas.login), async (req, res, next) => {
   try {
     const { email, password, deviceInfo } = req.body;
     
@@ -284,7 +272,7 @@ router.get('/me', authenticateAdmin, async (req, res, next) => {
 // @route   POST /api/admin/auth/invite
 // @desc    Invite new admin (Super Admin only)
 // @access  Private (Super Admin)
-router.post('/invite', authenticateSuperAdmin, validateInput(inviteAdminSchema), async (req, res, next) => {
+router.post('/invite', authenticateSuperAdmin, validate(inviteAdminSchema), async (req, res, next) => {
   try {
     const { email, profile, role = 'admin' } = req.body;
     
@@ -425,7 +413,7 @@ router.post('/setup-account', async (req, res, next) => {
 // @route   POST /api/admin/auth/create
 // @desc    Create admin directly (Super Admin only)
 // @access  Private (Super Admin)
-router.post('/create', authenticateSuperAdmin, validateInput(createAdminSchema), async (req, res, next) => {
+router.post('/create', authenticateSuperAdmin, validate(createAdminSchema), async (req, res, next) => {
   try {
     const { email, password, profile, role = 'admin' } = req.body;
     

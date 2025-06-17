@@ -4,7 +4,7 @@ const Questionnaire = require('../models/Questionnaire');
 const Startup = require('../models/Startup');
 const { AppError } = require('../middleware/errorHandler');
 const { authenticateStartup, authenticateAdmin } = require('../middleware/auth');
-const { validateInput } = require('../utils/validation');
+const { validate } = require('../utils/validation');
 const logger = require('../utils/logger');
 const { sendEmail } = require('../utils/communications');
 
@@ -89,18 +89,18 @@ router.get('/', authenticateStartup, async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status = 'available' } = req.query;
     
-    // Check if startup has approved questionnaire
-    const approvedQuestionnaire = await Questionnaire.findOne({
+    // Check if startup has approved or sprint_created questionnaire
+    const questionnaire = await Questionnaire.findOne({
       startupId: req.user._id,
-      status: 'approved'
+      status: { $in: ['approved', 'sprint_created'] }
     });
     
-    if (!approvedQuestionnaire) {
-      return next(new AppError('No approved questionnaire found. Please submit and get approval for a questionnaire first.', 403, 'NO_APPROVED_QUESTIONNAIRE'));
+    if (!questionnaire) {
+      return next(new AppError('No approved or sprint-created questionnaire found. Please submit and get approval for a questionnaire first.', 403, 'NO_APPROVED_QUESTIONNAIRE'));
     }
     
     const query = {
-      questionnaireId: approvedQuestionnaire._id,
+      questionnaireId: questionnaire._id,
       status: status === 'available' ? { $in: ['available', 'draft'] } : status
     };
     
@@ -282,7 +282,7 @@ router.get('/:id', authenticateStartup, async (req, res, next) => {
 // @route   POST /api/sprints/:id/select-package
 // @desc    Select package for sprint
 // @access  Private (Startup)
-router.post('/:id/select-package', authenticateStartup, validateInput(selectPackageSchema), async (req, res, next) => {
+router.post('/:id/select-package', authenticateStartup, validate(require('joi').object({ packageId: require('joi').string().required() })), async (req, res, next) => {
   try {
     const { packageId } = req.body;
     
@@ -530,7 +530,15 @@ router.post('/:id/schedule-meeting', authenticateStartup, async (req, res, next)
 // @route   POST /api/sprints/admin/create
 // @desc    Create custom sprint for questionnaire (Admin)
 // @access  Private (Admin)
-router.post('/admin/create', authenticateAdmin, validateInput(createSprintSchema), async (req, res, next) => {
+router.post('/admin/create', authenticateAdmin, validate(require('joi').object({
+  questionnaireId: require('joi').string().required(),
+  name: require('joi').string().min(3).max(100).required(),
+  description: require('joi').string().min(10).max(2000).required(),
+  type: require('joi').string().valid('mvp', 'validation', 'branding', 'marketing', 'fundraising', 'custom').required(),
+  estimatedDuration: require('joi').number().min(1).max(365).required(),
+  packageOptions: require('joi').array().min(1).required(),
+  requiredDocuments: require('joi').array().optional()
+})), async (req, res, next) => {
   try {
     const {
       questionnaireId,
@@ -736,7 +744,10 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
 // @route   PUT /api/sprints/admin/:id/status
 // @desc    Update sprint status (Admin)
 // @access  Private (Admin)
-router.put('/admin/:id/status', authenticateAdmin, validateInput(updateSprintStatusSchema), async (req, res, next) => {
+router.put('/admin/:id/status', authenticateAdmin, validate(require('joi').object({
+  status: require('joi').string().valid('draft', 'available', 'in_progress', 'on_hold', 'completed', 'cancelled').required(),
+  statusNote: require('joi').string().max(500).optional()
+})), async (req, res, next) => {
   try {
     const { status, statusNote } = req.body;
     
@@ -770,6 +781,17 @@ router.put('/admin/:id/status', authenticateAdmin, validateInput(updateSprintSta
     });
     
     await sprint.save();
+
+    // If sprint is now in_progress, set startup onboarding.currentStep to 'active_sprint'
+    if (status === 'in_progress' && sprint.questionnaireId && sprint.questionnaireId.startupId) {
+      await Startup.findByIdAndUpdate(
+        sprint.questionnaireId.startupId,
+        {
+          'onboarding.currentStep': 'active_sprint',
+          'onboarding.lastUpdated': new Date()
+        }
+      );
+    }
     
     logger.logInfo(`Sprint status updated by admin ${req.user._id}`, {
       sprintId: sprint._id,
