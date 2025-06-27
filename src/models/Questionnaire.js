@@ -75,19 +75,7 @@ const questionnaireSchema = new mongoose.Schema({
   requirements: {
     milestones: [{
       type: String,
-      enum: [
-        'Build MVP',
-        'Validate Idea',
-        'Market Research',
-        'User Testing',
-        'Branding & Design',
-        'Technical Architecture',
-        'Business Plan',
-        'Funding Strategy',
-        'Go-to-Market Strategy',
-        'Team Building',
-        'build-mvp'
-      ]
+      trim: true
     }],
     customMilestone: {
       type: String,
@@ -107,14 +95,7 @@ const questionnaireSchema = new mongoose.Schema({
     },
     budgetRange: {
       type: String,
-      enum: [
-        'Under $5,000',
-        '$5,000 - $10,000',
-        '$10,000 - $25,000',
-        '$25,000 - $50,000',
-        '$50,000 - $100,000',
-        'Over $100,000'
-      ],
+      trim: true,
       index: true
     },
     additionalRequirements: {
