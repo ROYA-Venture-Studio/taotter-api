@@ -820,4 +820,57 @@ router.put('/admin/:id/status', authenticateAdmin, validate(require('joi').objec
   }
 });
 
+
+/**
+ * @route   PUT /api/sprints/startup/:id/finish
+ * @desc    Mark sprint as completed (Startup)
+ * @access  Private (Startup)
+ */
+router.put('/startup/:id/finish', authenticateStartup, async (req, res, next) => {
+  try {
+    const sprint = await Sprint.findById(req.params.id).populate('questionnaireId');
+    if (!sprint) {
+      return next(new AppError('Sprint not found', 404, 'SPRINT_NOT_FOUND'));
+    }
+    // Check access
+    if (
+      !sprint.questionnaireId ||
+      !sprint.questionnaireId.startupId ||
+      sprint.questionnaireId.startupId.toString() !== req.user._id.toString()
+    ) {
+      return next(new AppError('You do not have access to this sprint', 403, 'SPRINT_ACCESS_DENIED'));
+    }
+    if (sprint.status === 'completed') {
+      return res.json({ success: true, message: 'Sprint already completed' });
+    }
+    sprint.status = 'completed';
+    sprint.endDate = new Date();
+    sprint.timeline.completedAt = new Date();
+    sprint.progress.percentage = 100;
+    sprint.statusHistory.push({
+      status: 'completed',
+      changedAt: new Date(),
+      changedBy: req.user._id,
+      userType: 'startup',
+      note: 'Sprint marked as completed by startup'
+    });
+    await sprint.save();
+    res.json({
+      success: true,
+      message: 'Sprint marked as completed',
+      data: {
+        sprint: {
+          id: sprint._id,
+          status: sprint.status,
+          endDate: sprint.endDate,
+          timeline: sprint.timeline,
+          progress: sprint.progress
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

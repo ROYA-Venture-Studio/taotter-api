@@ -104,20 +104,7 @@ const questionnaireSchemas = {
 
     requirements: Joi.object({
       milestones: Joi.array().items(
-        Joi.string().valid(
-          'Build MVP',
-          'Validate Idea',
-          'Market Research',
-          'User Testing',
-          'Branding & Design',
-          'Technical Architecture',
-          'Business Plan',
-          'Funding Strategy',
-          'Go-to-Market Strategy',
-          'Team Building',
-          'market-research',
-          'build-mvp'
-        )
+        Joi.string().trim()
       ).optional(),
       // customMilestone: Joi.string().trim().max(500).optional(),
       timeline: Joi.string().valid(
@@ -127,19 +114,12 @@ const questionnaireSchemas = {
         '3-6 months',
         '6+ months'
       ).optional(),
-      budgetRange: Joi.string().valid(
-        'Under $5,000',
-        '$5,000 - $10,000',
-        '$10,000 - $25,000',
-        '$25,000 - $50,000',
-        '$50,000 - $100,000',
-        'Over $100,000'
-      ).optional(),
+      budgetRange: Joi.string().trim().optional(),
       // additionalRequirements: Joi.string().trim().max(1000).optional()
     }).optional(),
 
     serviceSelection: Joi.object({
-      selectedService: Joi.string().trim().optional(),
+      selectedService: Joi.string().trim().allow('').optional(),
       customRequest: Joi.string().trim().max(1000).optional(),
       isCustom: Joi.boolean().optional(),
       urgency: Joi.string().valid('low', 'medium', 'high', 'urgent').optional()
