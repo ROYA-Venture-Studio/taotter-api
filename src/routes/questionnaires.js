@@ -354,9 +354,9 @@ router.post('/admin/:id/create-sprint', authenticateAdmin, async (req, res, next
           return res.status(400).json({ success: false, message: `Sprint field "${field}" is required.` });
         }
       }
-      if (!Array.isArray(sprintData.packageOptions) || sprintData.packageOptions.length !== 3) {
-        return res.status(400).json({ success: false, message: 'All 3 credit tiers (packageOptions) are required.' });
-      }
+      // if (!Array.isArray(sprintData.packageOptions) || sprintData.packageOptions.length !== 3) {
+      //   return res.status(400).json({ success: false, message: 'All 3 credit tiers (packageOptions) are required.' });
+      // }
 
       const sprint = new Sprint({
         questionnaireId: questionnaire._id,

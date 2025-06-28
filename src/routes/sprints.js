@@ -303,9 +303,8 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
       return next(new AppError('You do not have access to this sprint', 403, 'SPRINT_ACCESS_DENIED'));
     }
     
-    if (sprint.selectedPackage) {
-      return next(new AppError('Package already selected for this sprint', 400, 'PACKAGE_ALREADY_SELECTED'));
-    }
+    // REMOVED: Package already selected validation - allow users to change their choice
+    // This gives users the freedom to change their package selection
     
     // Find the selected package
     const selectedPackage = sprint.packageOptions.find(pkg => pkg._id.toString() === packageId);
@@ -354,13 +353,6 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
     } catch (emailError) {
       logger.logError('Package selection confirmation email failed', emailError);
     }
-    
-    logger.logInfo(`Package selected for sprint ${sprint._id}`, {
-      sprintId: sprint._id,
-      startupId: req.user._id,
-      packageId: packageId,
-      packageName: selectedPackage.name
-    });
     
     res.json({
       success: true,
@@ -473,9 +465,9 @@ router.post('/:id/schedule-meeting', authenticateStartup, async (req, res, next)
       return next(new AppError('You do not have access to this sprint', 403, 'SPRINT_ACCESS_DENIED'));
     }
     
-    if (!sprint.documentsSubmitted) {
-      return next(new AppError('Please submit required documents first', 400, 'DOCUMENTS_NOT_SUBMITTED'));
-    }
+    // if (!sprint.documentsSubmitted) {
+    //   return next(new AppError('Please submit required documents first', 400, 'DOCUMENTS_NOT_SUBMITTED'));
+    // }
     
     // Update sprint with meeting information
     sprint.meetingScheduled = {
@@ -819,7 +811,6 @@ router.put('/admin/:id/status', authenticateAdmin, validate(require('joi').objec
     next(error);
   }
 });
-
 
 /**
  * @route   PUT /api/sprints/startup/:id/finish
