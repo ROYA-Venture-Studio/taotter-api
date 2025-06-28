@@ -13,7 +13,150 @@ const Joi = require('joi');
 
 // ==================== TASK CRUD OPERATIONS ====================
 
-// ... (rest of the file unchanged) ...
+// @route   POST /api/tasks
+// @desc    Create new task (Admin)
+// @access  Private (Admin)
+router.post('/', authenticateAdmin, async (req, res, next) => {
+  try {
+    const { boardId, title, description, columnId, dueDate, taskType, priority, assigneeId, watchers } = req.body;
+
+    if (!boardId || !title || !columnId) {
+      return res.status(400).json({ success: false, message: 'Missing required fields.' });
+    }
+
+    // Get position for new task (end of column)
+    const tasksInColumn = await Task.find({ boardId, columnId }).sort({ position: -1 }).limit(1);
+    const position = tasksInColumn.length > 0 ? tasksInColumn[0].position + 1 : 0;
+
+    const task = new Task({
+      boardId,
+      title,
+      description,
+      columnId,
+      position,
+      dueDate: dueDate ? new Date(dueDate) : null,
+      taskType: taskType || 'feature',
+      priority: priority || 'medium',
+      assigneeId: assigneeId,
+      watchers: watchers || [],
+      createdBy: req.user._id,
+      createdByModel: 'Admin',
+      status: 'todo',
+      history: [{
+        action: 'created',
+        performedBy: req.user._id,
+        performedByModel: 'Admin',
+        changes: { created: true },
+        timestamp: new Date()
+      }]
+    });
+
+    await task.save();
+
+    res.status(201).json({ success: true, data: { task } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @route   POST /api/tasks/:id/move
+// @desc    Move task to different column/position (Admin)
+// @access  Private (Admin)
+router.post('/:id/move', authenticateAdmin, async (req, res, next) => {
+  try {
+    const { columnId, position } = req.body;
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+
+    const oldColumnId = task.columnId.toString();
+    const oldPosition = task.position;
+
+    // Update positions of other tasks
+    if (columnId === oldColumnId) {
+      // Moving within same column
+      if (position > oldPosition) {
+        await Task.updateMany(
+          {
+            boardId: task.boardId,
+            columnId: columnId,
+            position: { $gt: oldPosition, $lte: position }
+          },
+          { $inc: { position: -1 } }
+        );
+      } else if (position < oldPosition) {
+        await Task.updateMany(
+          {
+            boardId: task.boardId,
+            columnId: columnId,
+            position: { $gte: position, $lt: oldPosition }
+          },
+          { $inc: { position: 1 } }
+        );
+      }
+    } else {
+      // Moving to different column
+      await Task.updateMany(
+        {
+          boardId: task.boardId,
+          columnId: oldColumnId,
+          position: { $gt: oldPosition }
+        },
+        { $inc: { position: -1 } }
+      );
+
+      await Task.updateMany(
+        {
+          boardId: task.boardId,
+          columnId: columnId,
+          position: { $gte: position }
+        },
+        { $inc: { position: 1 } }
+      );
+    }
+
+    // Actually move the task
+    task.columnId = columnId;
+    task.position = position;
+    
+    // Add history entry (using the correct field name from the model)
+    // Initialize history array if it doesn't exist (for older tasks)
+    if (!task.history) {
+      task.history = [];
+    }
+    
+    task.history.push({
+      action: 'moved',
+      performedBy: req.user._id,
+      performedByModel: 'Admin',
+      changes: {
+        from: oldColumnId,
+        to: columnId,
+        position: position
+      },
+      timestamp: new Date()
+    });
+
+    await task.save();
+
+    res.json({
+      success: true,
+      message: 'Task moved successfully',
+      data: {
+        task: {
+          id: task._id,
+          columnId: task.columnId,
+          position: task.position,
+          status: task.status
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // @route   POST /api/tasks/startup
 // @desc    Create new task (Startup)
@@ -76,10 +219,11 @@ router.post('/startup', async (req, res, next) => {
       createdBy: req.user._id,
       createdByModel: 'Startup',
       status: 'todo',
-      activityLog: [{
+      history: [{
         action: 'created',
-        description: 'Task created by startup',
-        userId: req.user._id,
+        performedBy: req.user._id,
+        performedByModel: 'Startup',
+        changes: { created: true },
         timestamp: new Date()
       }]
     });
@@ -187,6 +331,25 @@ router.post('/startup/:id/move', async (req, res, next) => {
     // Actually move the task
     task.columnId = columnId;
     task.position = position;
+    
+    // Add history entry (using the correct field name from the model)
+    // Initialize history array if it doesn't exist (for older tasks)
+    if (!task.history) {
+      task.history = [];
+    }
+    
+    task.history.push({
+      action: 'moved',
+      performedBy: req.user._id,
+      performedByModel: 'Startup',
+      changes: {
+        from: oldColumnId,
+        to: columnId,
+        position: position
+      },
+      timestamp: new Date()
+    });
+
     await task.save();
 
     res.json({

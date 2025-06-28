@@ -71,6 +71,28 @@ const userSchemas = {
   })
 };
 
+// Sprint validation schemas
+const sprintSchemas = {
+  uploadDocuments: Joi.object({
+    brandGuidelines: Joi.any().optional(), // File upload - handled by multer
+    contactLists: Joi.string().trim().allow('').optional(),
+    appDemo: Joi.string().trim().allow('').optional(),
+    additionalFiles: Joi.array().optional(),
+    notes: Joi.string().trim().max(1000).optional()
+  }),
+
+  scheduleMeeting: Joi.object({
+    meetingUrl: Joi.string().uri().optional(),
+    scheduledAt: Joi.date().iso().required(),
+    meetingType: Joi.string().valid('kickoff', 'review', 'demo', 'feedback', 'completion').optional(),
+    notes: Joi.string().trim().max(500).optional()
+  }),
+
+  selectPackage: Joi.object({
+    packageId: Joi.string().required()
+  })
+};
+
 // Questionnaire validation schemas
 const questionnaireSchemas = {
   create: Joi.object({
@@ -94,6 +116,7 @@ const questionnaireSchemas = {
         'idea',
         'prototype',
         'mvp',
+        'validation',
         'early-stage',
         'growth-stage',
         'scaling'
@@ -144,6 +167,7 @@ const questionnaireSchemas = {
         'idea',
         'prototype',
         'mvp',
+        'validation',
         'early-stage',
         'growth-stage',
         'scaling'
@@ -438,6 +462,7 @@ const validate = (schema, property = 'body') => {
 
 module.exports = {
   userSchemas,
+  sprintSchemas,
   questionnaireSchemas,
   taskSchemas,
   boardSchemas,

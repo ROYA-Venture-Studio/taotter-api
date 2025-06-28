@@ -51,6 +51,7 @@ const questionnaireSchema = new mongoose.Schema({
         'idea',
         'prototype',
         'mvp',
+        'validation',
         'early-stage',
         'growth-stage',
         'scaling'
