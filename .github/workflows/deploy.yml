@@ -1,0 +1,41 @@
+name: Deploy to Staging VM (Self-Hosted Runner)
+
+on:
+  push:
+    branches:
+      - staging # Trigger on pushes to the 'main' branch
+
+jobs:
+  deploy:
+    runs-on: self-hosted # <--- IMPORTANT CHANGE: Use your self-hosted runner
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # No need for actions/setup-node@v4 as Node.js is already on your VM
+    # The self-hosted runner environment already has Node.js and npm from your VM setup
+
+    - name: Install Frontend Dependencies and Build (on the VM itself)
+      run: |
+        cd /home/azureuser/taotter-interface # Navigate to your frontend directory
+        npm install --production # Install production dependencies (or just 'npm install' if you prefer dev deps too)
+        npm run build # Build your frontend project
+      # The 'working-directory' property below is implied by the 'cd' command above,
+      # but if you prefer, you can use 'working-directory' for clarity:
+      # working-directory: /home/azureuser/taotter-interface
+
+    - name: Install Backend Dependencies (on the VM itself)
+      run: |
+        cd /home/azureuser/taotter-api # Navigate to your backend directory
+        npm install --production # Install production dependencies
+      # working-directory: /home/azureuser/taotter-api
+
+
+    - name: Restart PM2 Processes
+      run: |
+        echo "Restarting PM2 processes..."
+        # Assuming ecosystem.config.js is in /home/azureuser/
+        cd /home/azureuser/
+        pm2 restart ecosystem.config.js
+        echo "Deployment complete!"
