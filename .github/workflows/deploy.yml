@@ -7,36 +7,27 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: self-hosted # This targets the API-specific runner
 
     steps:
     - name: Checkout API code
       uses: actions/checkout@v4
-      # This checks out the 'taotter-api' repo into the runner's workspace: ${{ github.workspace }}
 
     - name: Clean and Copy Backend to VM Destination
       run: |
-        # Define the target directory on your VM
         DEPLOY_DIR="/home/azureuser/taotter-api"
-
         echo "Clearing old backend files from ${DEPLOY_DIR}..."
-        sudo rm -rf "${DEPLOY_DIR}/*" # Use sudo if azureuser owns the dir, or ensure runner has write access
-
+        sudo rm -rf "${DEPLOY_DIR}/*" # Adjust if you want to keep node_modules or .env
         echo "Copying new backend files from checkout to ${DEPLOY_DIR}..."
-        # Use rsync for efficient copying, or cp -R if rsync not available
-        sudo cp -R "${{ github.workspace }}/." "${DEPLOY_DIR}/" # Use sudo if needed
+        sudo cp -R "${{ github.workspace }}/." "${DEPLOY_DIR}/"
 
-        # It's safer to ensure node_modules are fresh after a copy
         echo "Installing backend dependencies in ${DEPLOY_DIR}..."
         cd "${DEPLOY_DIR}"
-        npm install --production # Only production dependencies for runtime
+        npm install --production # Install production dependencies only
 
     - name: Restart PM2 Backend Process
       run: |
         echo "Restarting PM2 backend process..."
-        # Assuming ecosystem.config.js is in /home/azureuser/
-        # Make sure ecosystem.config.js correctly points to /home/azureuser/taotter-api for CWD
-        cd /home/azureuser/
-        pm2 restart taotter-backend
-
+        cd /home/azureuser/ # Assuming ecosystem.config.js is here
+        pm2 restart taotter-backend # Make sure this matches your ecosystem.config.js name
         echo "API deployment complete!"
