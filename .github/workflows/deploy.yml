@@ -1,41 +1,42 @@
-name: Deploy to Staging VM (Self-Hosted Runner)
+name: Deploy API to Staging VM
 
 on:
   push:
     branches:
-      - staging # Trigger on pushes to the 'main' branch
+      - staging
 
 jobs:
   deploy:
-    runs-on: self-hosted # <--- IMPORTANT CHANGE: Use your self-hosted runner
+    runs-on: self-hosted
 
     steps:
-    - name: Checkout code
+    - name: Checkout API code
       uses: actions/checkout@v4
+      # This checks out the 'taotter-api' repo into the runner's workspace: ${{ github.workspace }}
 
-    # No need for actions/setup-node@v4 as Node.js is already on your VM
-    # The self-hosted runner environment already has Node.js and npm from your VM setup
-
-    - name: Install Frontend Dependencies and Build (on the VM itself)
+    - name: Clean and Copy Backend to VM Destination
       run: |
-        cd /home/azureuser/taotter-interface # Navigate to your frontend directory
-        npm install --production # Install production dependencies (or just 'npm install' if you prefer dev deps too)
-        npm run build # Build your frontend project
-      # The 'working-directory' property below is implied by the 'cd' command above,
-      # but if you prefer, you can use 'working-directory' for clarity:
-      # working-directory: /home/azureuser/taotter-interface
+        # Define the target directory on your VM
+        DEPLOY_DIR="/home/azureuser/taotter-api"
 
-    - name: Install Backend Dependencies (on the VM itself)
+        echo "Clearing old backend files from ${DEPLOY_DIR}..."
+        sudo rm -rf "${DEPLOY_DIR}/*" # Use sudo if azureuser owns the dir, or ensure runner has write access
+
+        echo "Copying new backend files from checkout to ${DEPLOY_DIR}..."
+        # Use rsync for efficient copying, or cp -R if rsync not available
+        sudo cp -R "${{ github.workspace }}/." "${DEPLOY_DIR}/" # Use sudo if needed
+
+        # It's safer to ensure node_modules are fresh after a copy
+        echo "Installing backend dependencies in ${DEPLOY_DIR}..."
+        cd "${DEPLOY_DIR}"
+        npm install --production # Only production dependencies for runtime
+
+    - name: Restart PM2 Backend Process
       run: |
-        cd /home/azureuser/taotter-api # Navigate to your backend directory
-        npm install --production # Install production dependencies
-      # working-directory: /home/azureuser/taotter-api
-
-
-    - name: Restart PM2 Processes
-      run: |
-        echo "Restarting PM2 processes..."
+        echo "Restarting PM2 backend process..."
         # Assuming ecosystem.config.js is in /home/azureuser/
+        # Make sure ecosystem.config.js correctly points to /home/azureuser/taotter-api for CWD
         cd /home/azureuser/
-        pm2 restart ecosystem.config.js
-        echo "Deployment complete!"
+        pm2 restart taotter-backend
+
+        echo "API deployment complete!"
