@@ -1,0 +1,33 @@
+name: Deploy API to Staging VM
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: self-hosted # This targets the API-specific runner
+
+    steps:
+    - name: Checkout API code
+      uses: actions/checkout@v4
+
+    - name: Clean and Copy Backend to VM Destination
+      run: |
+        DEPLOY_DIR="/home/azureuser/taotter-api"
+        echo "Clearing old backend files from ${DEPLOY_DIR}..."
+        sudo rm -rf "${DEPLOY_DIR}/*" # Adjust if you want to keep node_modules or .env
+        echo "Copying new backend files from checkout to ${DEPLOY_DIR}..."
+        sudo cp -R "${{ github.workspace }}/." "${DEPLOY_DIR}/"
+
+        echo "Installing backend dependencies in ${DEPLOY_DIR}..."
+        cd "${DEPLOY_DIR}"
+        npm install --production # Install production dependencies only
+
+    - name: Restart PM2 Backend Process
+      run: |
+        echo "Restarting PM2 backend process..."
+        cd /home/azureuser/ # Assuming ecosystem.config.js is here
+        pm2 restart taotter-backend # Make sure this matches your ecosystem.config.js name
+        echo "API deployment complete!"

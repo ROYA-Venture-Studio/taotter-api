@@ -251,6 +251,7 @@ function startSocketServer() {
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
       exposedHeaders: ['X-Total-Count', 'X-Page-Count']
+
     }
   });
   socketManager.initializeSocketIO(io);
