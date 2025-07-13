@@ -237,15 +237,21 @@ const server = app.listen(PORT, () => {
 // Socket.IO initialization after DB connection
 function startSocketServer() {
   const { Server } = require('socket.io');
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.ADMIN_FRONTEND_URL,
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ].map(origin => origin && origin.replace(/\/$/, '')).filter(Boolean);
+
   const io = new Server(server, {
     cors: {
-      origin: [
-        process.env.FRONTEND_URL,
-        process.env.ADMIN_FRONTEND_URL,
-        'http://localhost:3000',
-        'http://localhost:3001'
-      ].filter(Boolean),
-      credentials: true
+      origin: allowedOrigins,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      exposedHeaders: ['X-Total-Count', 'X-Page-Count']
+
     }
   });
   socketManager.initializeSocketIO(io);
