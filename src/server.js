@@ -241,6 +241,7 @@ function startSocketServer() {
       origin: [
         process.env.FRONTEND_URL,
         process.env.ADMIN_FRONTEND_URL,
+        'http://20.57.132.51:3000',
         'http://localhost:3000',
         'http://localhost:3001'
       ].filter(Boolean),
