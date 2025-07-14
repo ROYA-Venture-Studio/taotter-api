@@ -72,11 +72,10 @@ app.use(helmet({
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
-      process.env.FRONTEND_URL,
-      process.env.ADMIN_FRONTEND_URL,
+      'http://20.57.132.51:3000',
       'http://localhost:3000',
       'http://localhost:3001'
-    ].filter(Boolean);
+    ];
     
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
