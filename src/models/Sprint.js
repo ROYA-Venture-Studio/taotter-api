@@ -56,7 +56,21 @@ const packageOptionSchema = new mongoose.Schema({
     name: String,
     description: String,
     estimatedHours: Number
-  }]
+  }],
+  hourlyRate: {
+    type: Number,
+    min: 0,
+    required: false
+  },
+  discount: {
+    type: Number,
+    min: 0,
+    required: false
+  },
+  tier: {
+    type: String,
+    required: false
+  }
 }, { _id: true });
 
 const requiredDocumentSchema = new mongoose.Schema({

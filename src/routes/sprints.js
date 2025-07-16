@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const Sprint = require('../models/Sprint');
 const Questionnaire = require('../models/Questionnaire');
 const Startup = require('../models/Startup');
@@ -7,6 +8,29 @@ const { authenticateStartup, authenticateAdmin } = require('../middleware/auth')
 const { validate } = require('../utils/validation');
 const logger = require('../utils/logger');
 const { sendEmail } = require('../utils/communications');
+const azureStorage = require('../utils/azureStorage');
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow PDF, DOC, DOCX files
+    const allowedMimes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new AppError('Only PDF and Word documents are allowed', 400, 'INVALID_FILE_TYPE'), false);
+    }
+  }
+});
 
 const router = express.Router();
 
@@ -375,10 +399,11 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
 // @route   POST /api/sprints/:id/upload-documents
 // @desc    Upload required documents for sprint
 // @access  Private (Startup)
-router.post('/:id/upload-documents', authenticateStartup, async (req, res, next) => {
+router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGuidelines'), async (req, res, next) => {
   try {
-    // This will be implemented when we create the document management system
-    // For now, just mark documents as submitted
+    const { contactLists, appDemo } = req.body;
+    const file = req.file;
+    
     const sprint = await Sprint.findById(req.params.id)
       .populate('questionnaireId');
     
@@ -396,9 +421,51 @@ router.post('/:id/upload-documents', authenticateStartup, async (req, res, next)
       return next(new AppError('You do not have access to this sprint', 403, 'SPRINT_ACCESS_DENIED'));
     }
     
-    if (!sprint.selectedPackage) {
-      return next(new AppError('Please select a package first', 400, 'NO_PACKAGE_SELECTED'));
+    // Package selection is not required for document upload
+    
+    const uploadedDocuments = [];
+    
+    // Upload file to Azure if provided
+    if (file) {
+      try {
+        const uploadResult = await azureStorage.uploadFile(
+          file,
+          req.user._id,
+          req.params.id,
+          'brandGuidelines'
+        );
+        
+        if (uploadResult.success) {
+          const documentData = {
+            sprintId: req.params.id,
+            fileName: uploadResult.fileName,
+            originalName: file.originalname,
+            fileUrl: uploadResult.fileUrl,
+            fileType: file.mimetype,
+            documentType: 'brandGuidelines'
+          };
+          
+          // Add document to startup's sprintDocuments array
+          await Startup.findByIdAndUpdate(req.user._id, {
+            $push: { sprintDocuments: documentData }
+          });
+          
+          uploadedDocuments.push(documentData);
+        }
+      } catch (uploadError) {
+        logger.logError('File upload error', uploadError);
+        return next(new AppError('Failed to upload file', 500, 'FILE_UPLOAD_ERROR'));
+      }
     }
+    
+    // Store text fields in startup profile or create a separate collection
+    const documentSubmission = {
+      sprintId: req.params.id,
+      contactLists: contactLists || '',
+      appDemo: appDemo || '',
+      documentsUploaded: uploadedDocuments,
+      submittedAt: new Date()
+    };
     
     // Mark documents as submitted
     sprint.documentsSubmitted = true;
@@ -411,7 +478,7 @@ router.post('/:id/upload-documents', authenticateStartup, async (req, res, next)
       changedAt: new Date(),
       changedBy: req.user._id,
       userType: 'startup',
-      note: 'Required documents submitted'
+      note: `Documents submitted${file ? ' with file upload' : ''}`
     });
     
     await sprint.save();
@@ -432,7 +499,9 @@ router.post('/:id/upload-documents', authenticateStartup, async (req, res, next)
           status: sprint.status,
           documentsSubmitted: sprint.documentsSubmitted,
           timeline: sprint.timeline
-        }
+        },
+        uploadedDocuments,
+        submission: documentSubmission
       }
     });
     
