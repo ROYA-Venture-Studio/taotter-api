@@ -244,6 +244,40 @@ const startupSchema = new mongoose.Schema({
     }
   },
   
+  // Sprint documents and uploads
+  sprintDocuments: [{
+    sprintId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Sprint',
+      required: true
+    },
+    fileName: {
+      type: String,
+      required: true
+    },
+    originalName: {
+      type: String,
+      required: true
+    },
+    fileUrl: {
+      type: String,
+      required: true
+    },
+    fileType: {
+      type: String,
+      required: true
+    },
+    documentType: {
+      type: String,
+      enum: ['brandGuidelines', 'contactLists', 'appDemo', 'other'],
+      required: true
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  
   // Admin assignments and notes
   assignedAdminId: {
     type: mongoose.Schema.Types.ObjectId,
