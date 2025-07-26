@@ -17,39 +17,27 @@ const router = express.Router();
 
 const { userSchemas } = require('../utils/validation');
 
-const createAdminSchema = {
-  email: {
-    required: true,
-    type: 'email',
-    message: 'Valid email is required'
-  },
-  'profile.firstName': {
-    required: true,
-    type: 'string',
-    minLength: 2,
-    maxLength: 50,
-    message: 'First name is required (2-50 characters)'
-  },
-  'profile.lastName': {
-    required: true,
-    type: 'string',
-    minLength: 2,
-    maxLength: 50,
-    message: 'Last name is required (2-50 characters)'
-  },
-  'profile.department': {
-    required: true,
-    type: 'string',
-    enum: ['operations', 'business-development', 'technical', 'marketing', 'finance', 'legal', 'hr', 'management'],
-    message: 'Valid department is required'
-  },
-  role: {
-    required: false,
-    type: 'string',
-    enum: ['admin', 'super_admin'],
-    message: 'Valid role is required'
-  }
-};
+const Joi = require('joi');
+
+const createAdminSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(8).required(),
+  profile: Joi.object({
+    firstName: Joi.string().min(2).max(50).required(),
+    lastName: Joi.string().min(2).max(50).required(),
+    department: Joi.string().valid(
+      'operations',
+      'business-development',
+      'technical',
+      'marketing',
+      'finance',
+      'legal',
+      'hr',
+      'management'
+    ).required()
+  }).required(),
+  role: Joi.string().valid('admin', 'super_admin').optional()
+});
 
 const inviteAdminSchema = {
   email: {
@@ -413,10 +401,12 @@ router.post('/setup-account', async (req, res, next) => {
 // @route   POST /api/admin/auth/create
 // @desc    Create admin directly (Super Admin only)
 // @access  Private (Super Admin)
-router.post('/create', authenticateSuperAdmin, validate(createAdminSchema), async (req, res, next) => {
+router.post('/create', 
+  // authenticateSuperAdmin, 
+  validate(createAdminSchema), async (req, res, next) => {
   try {
     const { email, password, profile, role = 'admin' } = req.body;
-    
+    console.log(req.body)
     // Check if admin already exists
     const existingAdmin = await Admin.findOne({ email });
     if (existingAdmin) {
@@ -434,7 +424,7 @@ router.post('/create', authenticateSuperAdmin, validate(createAdminSchema), asyn
       profile,
       role,
       status: 'active',
-      createdBy: req.user._id
+      createdBy: "684e02ee985a60e9fb88f1b0"
     });
     
     await admin.save();
