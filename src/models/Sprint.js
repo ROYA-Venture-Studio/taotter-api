@@ -25,13 +25,13 @@ const packageOptionSchema = new mongoose.Schema({
   },
   engagementHours: {
     type: Number,
-    required: true,
-    min: 1
+    required: false,
+    min: 0
   },
   duration: {
     type: Number, // Duration in weeks
-    required: true,
-    min: 1
+    required: false,
+    min: 0
   },
   features: [{
     type: String,
@@ -39,8 +39,8 @@ const packageOptionSchema = new mongoose.Schema({
   }],
   teamSize: {
     type: Number,
-    required: true,
-    min: 1,
+    required: false,
+    min: 0,
     max: 20
   },
   communicationLevel: {
@@ -62,6 +62,21 @@ const packageOptionSchema = new mongoose.Schema({
     min: 0,
     required: false
   },
+  amount: {
+    type: Number,
+    min: 0,
+    required: false
+  },
+  paymentLink: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  QTY: {
+    type: Number,
+    min: 0,
+    required: false
+  },
   discount: {
     type: Number,
     min: 0,
@@ -71,42 +86,6 @@ const packageOptionSchema = new mongoose.Schema({
     type: String,
     required: false
   }
-}, { _id: true });
-
-const requiredDocumentSchema = new mongoose.Schema({
-  fieldName: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  fieldType: {
-    type: String,
-    required: true,
-    enum: ['file', 'text', 'textarea', 'select', 'checkbox', 'radio', 'date', 'number']
-  },
-  label: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  description: {
-    type: String,
-    trim: true
-  },
-  isRequired: {
-    type: Boolean,
-    default: true
-  },
-  validationRules: {
-    fileTypes: [String], // For file fields
-    maxFileSize: Number, // In bytes
-    minLength: Number,
-    maxLength: Number,
-    pattern: String, // Regex pattern
-    options: [String] // For select, radio, checkbox
-  },
-  placeholder: String,
-  defaultValue: mongoose.Schema.Types.Mixed
 }, { _id: true });
 
 const milestoneSchema = new mongoose.Schema({
@@ -187,12 +166,35 @@ const statusHistorySchema = new mongoose.Schema({
   }
 }, { _id: true });
 
+// Sprint attachments schemas
+const sprintDocumentSchema = new mongoose.Schema({
+  fileName: String,
+  originalName: String,
+  fileUrl: String,
+  fileType: String,
+  documentType: String,
+  uploadedAt: { type: Date, default: Date.now }
+}, { _id: false });
+
+const sprintDocumentsBlockSchema = new mongoose.Schema({
+  uploadedFiles: [sprintDocumentSchema],
+  contactLists: String,
+  appDemo: String,
+  submittedAt: Date
+}, { _id: false });
+
 const sprintSchema = new mongoose.Schema({
   questionnaireId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Questionnaire',
     required: true,
     unique: true
+  },
+
+  // Sprint attachments block
+  sprintDocuments: {
+    type: sprintDocumentsBlockSchema,
+    default: () => ({ uploadedFiles: [], contactLists: '', appDemo: '', submittedAt: null })
   },
   name: {
     type: String,
@@ -235,7 +237,18 @@ const sprintSchema = new mongoose.Schema({
   },
   packageOptions: [packageOptionSchema],
   selectedPackage: packageOptionSchema,
-  requiredDocuments: [requiredDocumentSchema],
+
+  // Payment status for selected package
+  selectedPackagePaymentStatus: {
+    type: String,
+    enum: ['paid', 'unpaid'],
+    default: 'unpaid'
+  },
+  selectedPackagePaymentVerifiedAt: Date,
+  selectedPackagePaymentVerifiedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin'
+  },
   documentsSubmitted: {
     type: Boolean,
     default: false
