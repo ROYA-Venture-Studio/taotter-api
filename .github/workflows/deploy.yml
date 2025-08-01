@@ -1,27 +1,33 @@
-name: Auto Deploy
+name: Deploy API to Staging VM
 
 on:
   push:
     branches:
-      - master
+      - staging
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted # This targets the API-specific runner
 
     steps:
-    - name: Checkout code
+    - name: Checkout API code
       uses: actions/checkout@v4
 
-    - name: Connect to server and deploy
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.SERVER_IP }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        script: |
-          cd /var/www/taotter-api
-          git pull origin main
-          docker compose down
-          docker compose up -d --build
+    - name: Clean and Copy Backend to VM Destination
+      run: |
+        DEPLOY_DIR="/home/azureuser/taotter-api"
+        echo "Clearing old backend files from ${DEPLOY_DIR}..."
+        sudo rm -rf "${DEPLOY_DIR}/*" # Adjust if you want to keep node_modules or .env
+        echo "Copying new backend files from checkout to ${DEPLOY_DIR}..."
+        sudo cp -R "${{ github.workspace }}/." "${DEPLOY_DIR}/"
 
+        echo "Installing backend dependencies in ${DEPLOY_DIR}..."
+        cd "${DEPLOY_DIR}"
+        npm install --production # Install production dependencies only
+
+    - name: Restart PM2 Backend Process
+      run: |
+        echo "Restarting PM2 backend process..."
+        cd /home/azureuser/ # Assuming ecosystem.config.js is here
+        pm2 restart taotter-backend # Make sure this matches your ecosystem.config.js name
+        echo "API deployment complete!"
