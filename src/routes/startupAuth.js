@@ -84,7 +84,21 @@ router.post('/register', validate(registerSchema), async (req, res, next) => {
       deviceInfo: req.headers['user-agent'] || 'Unknown'
     });
     
-    // Send verification email
+    // Send welcome email (Azure Communication Services)
+    try {
+      await sendEmail({
+        to: email,
+        template: 'signupSuccess',
+        data: {
+          name: `${profile.founderFirstName} ${profile.founderLastName}`,
+          dashboardUrl: process.env.FRONTEND_URL + '/dashboard'
+        }
+      });
+    } catch (emailError) {
+      logger.logError('Welcome email sending failed during registration', emailError, { email });
+    }
+
+    // Send verification email (legacy, if enabled)
     if (process.env.ENABLE_EMAIL_VERIFICATION === 'true') {
       try {
         const verificationUrl = `${process.env.FRONTEND_URL}/startup/verify-email?token=${emailVerificationToken}`;

@@ -46,6 +46,7 @@ async function uploadFile(file, userId, sprintId, documentType) {
       fileName: uniqueName
     };
   } catch (error) {
+    console.log(error)
     return {
       success: false,
       error: error.message || error

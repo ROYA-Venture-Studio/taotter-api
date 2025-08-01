@@ -214,6 +214,7 @@ const startupSchema = new mongoose.Schema({
         'sprint_selection',
         'sprint_onboarding',
         'document_upload',
+        'payment_pending',
         'meeting_scheduling',
         'meeting_scheduled',
         'active_sprint',

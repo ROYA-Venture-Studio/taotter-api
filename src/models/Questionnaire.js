@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const questionnaireSchema = new mongoose.Schema({
+  // Link to created sprint (if any)
+  sprintId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sprint'
+  },
   // Reference to the startup submitting the questionnaire
   startupId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -163,7 +168,7 @@ const questionnaireSchema = new mongoose.Schema({
   // Status and workflow
   status: {
     type: String,
-    enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'revision_requested', 'sprint_created'],
+    enum: ['draft', 'submitted', 'meeting_scheduled', 'sprint_created'],
     default: 'draft',
     index: true
   },

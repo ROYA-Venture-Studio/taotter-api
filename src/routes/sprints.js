@@ -23,7 +23,6 @@ const upload = multer({
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
-    
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -34,81 +33,82 @@ const upload = multer({
 
 const router = express.Router();
 
-// Validation schemas
-const createSprintSchema = {
-  questionnaireId: {
-    required: true,
-    type: 'string',
-    message: 'Questionnaire ID is required'
-  },
-  name: {
-    required: true,
-    type: 'string',
-    minLength: 3,
-    maxLength: 100,
-    message: 'Sprint name is required (3-100 characters)'
-  },
-  description: {
-    required: true,
-    type: 'string',
-    minLength: 10,
-    maxLength: 2000,
-    message: 'Sprint description is required (10-2000 characters)'
-  },
-  type: {
-    required: true,
-    type: 'string',
-    enum: ['mvp', 'validation', 'branding', 'marketing', 'fundraising', 'custom'],
-    message: 'Valid sprint type is required'
-  },
-  estimatedDuration: {
-    required: true,
-    type: 'number',
-    min: 1,
-    max: 365,
-    message: 'Estimated duration must be between 1 and 365 days'
-  },
-  packageOptions: {
-    required: true,
-    type: 'array',
-    minItems: 1,
-    message: 'At least one package option is required'
-  },
-  requiredDocuments: {
-    required: false,
-    type: 'array',
-    message: 'Required documents must be an array'
-  }
-};
+// ... (validation schemas and other endpoints) ...
 
-const selectPackageSchema = {
-  packageId: {
-    required: true,
-    type: 'string',
-    message: 'Package ID is required'
-  }
-};
-
-const updateSprintStatusSchema = {
-  status: {
-    required: true,
-    type: 'string',
-    enum: ['draft', 'available', 'in_progress', 'on_hold', 'completed', 'cancelled'],
-    message: 'Valid status is required'
-  },
-  statusNote: {
-    required: false,
-    type: 'string',
-    maxLength: 500,
-    message: 'Status note cannot exceed 500 characters'
-  }
-};
-
-// ==================== STARTUP ROUTES ====================
-
-// @route   GET /api/sprints
-// @desc    Get available sprints for startup
+// @route   GET /api/sprints/my-sprints
+// @desc    Get startup's sprints (selected/active)
 // @access  Private (Startup)
+// @route   GET /api/sprints/my-sprints
+// @desc    Get startup's sprints (selected/active)
+// @access  Private (Startup)
+router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+
+    // Find questionnaires for this startup
+    const questionnaires = await Questionnaire.find({
+      startupId: req.user._id
+    }).select('_id');
+
+    const questionnaireIds = questionnaires.map(q => q._id);
+
+    const query = {
+      questionnaireId: { $in: questionnaireIds },
+      selectedPackage: { $exists: true }
+    };
+
+    if (status) {
+      query.status = status;
+    }
+
+    const sprints = await Sprint.find(query)
+      .sort({ updatedAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .populate('createdBy', 'profile.firstName profile.lastName')
+      .populate('assignedTeam.members.userId', 'profile.firstName profile.lastName profile.role profile.department');
+
+    const total = await Sprint.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        sprints: sprints.map(sprint => ({
+          id: sprint._id,
+          name: sprint.name,
+          description: sprint.description,
+          type: sprint.type,
+          status: sprint.status,
+          progress: sprint.progress,
+          selectedPackage: sprint.selectedPackage,
+          assignedTeam: sprint.assignedTeam,
+          timeline: sprint.timeline,
+          milestones: sprint.milestones,
+          createdAt: sprint.createdAt,
+          startDate: sprint.startDate,
+          endDate: sprint.endDate,
+          documentsSubmitted: sprint.documentsSubmitted,
+          meetingScheduled: sprint.meetingScheduled,
+          selectedPackagePaymentStatus: sprint.selectedPackagePaymentStatus || "unpaid",
+          selectedPackagePaymentVerifiedAt: sprint.selectedPackagePaymentVerifiedAt || null,
+        })),
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          limit: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ... (rest of the code remains unchanged) ...
+
+module.exports = router;
 router.get('/', authenticateStartup, async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status = 'available' } = req.query;
@@ -158,7 +158,8 @@ router.get('/', authenticateStartup, async (req, res, next) => {
             features: pkg.features,
             teamSize: pkg.teamSize,
             communicationLevel: pkg.communicationLevel,
-            isRecommended: pkg.isRecommended
+            isRecommended: pkg.isRecommended,
+            paymentLink: pkg.paymentLink || ""
           })),
           createdBy: sprint.createdBy,
           createdAt: sprint.createdAt,
@@ -230,7 +231,10 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
           startDate: sprint.startDate,
           endDate: sprint.endDate,
           documentsSubmitted: sprint.documentsSubmitted,
-          meetingScheduled: sprint.meetingScheduled
+          meetingScheduled: sprint.meetingScheduled,
+          // ADD THESE FIELDS FOR PAYMENT STATUS
+          selectedPackagePaymentStatus: sprint.selectedPackagePaymentStatus || "unpaid",
+          selectedPackagePaymentVerifiedAt: sprint.selectedPackagePaymentVerifiedAt || null,
         })),
         pagination: {
           currentPage: parseInt(page),
@@ -327,9 +331,6 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
       return next(new AppError('You do not have access to this sprint', 403, 'SPRINT_ACCESS_DENIED'));
     }
     
-    // REMOVED: Package already selected validation - allow users to change their choice
-    // This gives users the freedom to change their package selection
-    
     // Find the selected package
     const selectedPackage = sprint.packageOptions.find(pkg => pkg._id.toString() === packageId);
     if (!selectedPackage) {
@@ -354,7 +355,7 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
     
     // Update startup onboarding
     await Startup.findByIdAndUpdate(req.user._id, {
-      'onboarding.currentStep': 'document_upload',
+      'onboarding.currentStep': 'payment_pending',
       'onboarding.packageSelected': true,
       'onboarding.lastUpdated': new Date()
     });
@@ -421,8 +422,6 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
       return next(new AppError('You do not have access to this sprint', 403, 'SPRINT_ACCESS_DENIED'));
     }
     
-    // Package selection is not required for document upload
-    
     const uploadedDocuments = [];
     
     // Upload file to Azure if provided
@@ -434,22 +433,26 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
           req.params.id,
           'brandGuidelines'
         );
-        
+        console.log(uploadResult);
         if (uploadResult.success) {
           const documentData = {
-            sprintId: req.params.id,
             fileName: uploadResult.fileName,
             originalName: file.originalname,
             fileUrl: uploadResult.fileUrl,
             fileType: file.mimetype,
-            documentType: 'brandGuidelines'
+            documentType: 'brandGuidelines',
+            uploadedAt: new Date()
           };
           
-          // Add document to startup's sprintDocuments array
-          await Startup.findByIdAndUpdate(req.user._id, {
-            $push: { sprintDocuments: documentData }
-          });
-          
+          // Store uploaded file in sprint.sprintDocuments
+          if (!sprint.sprintDocuments) {
+            sprint.sprintDocuments = { uploadedFiles: [], contactLists: '', appDemo: '', submittedAt: null };
+          }
+          if (!Array.isArray(sprint.sprintDocuments.uploadedFiles)) {
+            sprint.sprintDocuments.uploadedFiles = [];
+          }
+          sprint.sprintDocuments.uploadedFiles.push(documentData);
+
           uploadedDocuments.push(documentData);
         }
       } catch (uploadError) {
@@ -457,8 +460,15 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
         return next(new AppError('Failed to upload file', 500, 'FILE_UPLOAD_ERROR'));
       }
     }
-    
-    // Store text fields in startup profile or create a separate collection
+
+    // Store text fields in sprint.sprintDocuments
+    if (!sprint.sprintDocuments) {
+      sprint.sprintDocuments = { uploadedFiles: [], contactLists: '', appDemo: '', submittedAt: null };
+    }
+    sprint.sprintDocuments.contactLists = contactLists || '';
+    sprint.sprintDocuments.appDemo = appDemo || '';
+    sprint.sprintDocuments.submittedAt = new Date();
+
     const documentSubmission = {
       sprintId: req.params.id,
       contactLists: contactLists || '',
@@ -534,10 +544,6 @@ router.post('/:id/schedule-meeting', authenticateStartup, async (req, res, next)
       return next(new AppError('You do not have access to this sprint', 403, 'SPRINT_ACCESS_DENIED'));
     }
     
-    // if (!sprint.documentsSubmitted) {
-    //   return next(new AppError('Please submit required documents first', 400, 'DOCUMENTS_NOT_SUBMITTED'));
-    // }
-    
     // Update sprint with meeting information
     sprint.meetingScheduled = {
       isScheduled: true,
@@ -581,6 +587,83 @@ router.post('/:id/schedule-meeting', authenticateStartup, async (req, res, next)
       }
     });
     
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   PUT /api/sprints/admin/:sprintId/payment-status
+ * @desc    Update payment status for the selected package (Admin)
+ * @access  Private (Admin)
+ */
+router.put('/admin/:sprintId/payment-status', authenticateAdmin, async (req, res, next) => {
+  try {
+    const { paymentStatus } = req.body;
+    if (!['paid', 'unpaid'].includes(paymentStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment status' });
+    }
+    const sprint = await Sprint.findById(req.params.sprintId);
+    if (!sprint) {
+      return res.status(404).json({ success: false, message: 'Sprint not found' });
+    }
+    sprint.selectedPackagePaymentStatus = paymentStatus;
+    if (paymentStatus === 'paid') {
+      sprint.selectedPackagePaymentVerifiedAt = new Date();
+      sprint.selectedPackagePaymentVerifiedBy = req.user._id;
+    } else {
+      sprint.selectedPackagePaymentVerifiedAt = undefined;
+      sprint.selectedPackagePaymentVerifiedBy = undefined;
+    }
+    await sprint.save();
+
+    // Fetch questionnaire and startup info for email and onboarding update
+    let questionnaire = null;
+    let startup = null;
+    try {
+      questionnaire = await Questionnaire.findById(sprint.questionnaireId).populate('startupId');
+      startup = questionnaire && questionnaire.startupId ? questionnaire.startupId : null;
+    } catch (e) {
+      logger.logError('Failed to fetch questionnaire/startup for payment status update', e);
+    }
+
+    // Update startup onboarding step if paid
+    if (paymentStatus === 'paid' && startup) {
+      try {
+        await Startup.findByIdAndUpdate(startup._id, {
+          'onboarding.currentStep': 'active_sprint',
+          'onboarding.lastUpdated': new Date()
+        });
+      } catch (e) {
+        logger.logError('Failed to update startup onboarding to active_sprint after payment', e, { startupId: startup._id });
+      }
+    }
+
+    // Send payment confirmation email if paid
+    if (paymentStatus === 'paid' && startup) {
+      try {
+        await sendEmail({
+          to: startup.email,
+          template: 'paymentConfirmed',
+          data: {
+            name: `${startup.profile.founderFirstName} ${startup.profile.founderLastName}`,
+            sprintName: sprint.name,
+            dashboardUrl: process.env.FRONTEND_URL + '/dashboard'
+          }
+        });
+      } catch (emailError) {
+        logger.logError('Payment confirmation email failed', emailError, { sprintId: sprint._id });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Selected package payment status updated',
+      data: {
+        sprintId: sprint._id,
+        selectedPackagePaymentStatus: sprint.selectedPackagePaymentStatus
+      }
+    });
   } catch (error) {
     next(error);
   }
@@ -634,6 +717,10 @@ router.post('/admin/create', authenticateAdmin, validate(require('joi').object({
       if (!pkg.name || !pkg.description || !pkg.price || !pkg.currency) {
         return next(new AppError('Each package must have name, description, price, and currency', 400, 'INVALID_PACKAGE_OPTIONS'));
       }
+      // Validate paymentLink if present
+      if (pkg.paymentLink && typeof pkg.paymentLink !== 'string') {
+        return next(new AppError('Payment link must be a string', 400, 'INVALID_PAYMENT_LINK'));
+      }
     }
     
     // Create sprint
@@ -647,7 +734,8 @@ router.post('/admin/create', authenticateAdmin, validate(require('joi').object({
       packageOptions: packageOptions.map((pkg, index) => ({
         ...pkg,
         _id: undefined, // Let MongoDB generate new IDs
-        isRecommended: pkg.isRecommended || false
+        isRecommended: pkg.isRecommended || false,
+        paymentLink: pkg.paymentLink || ""
       })),
       requiredDocuments,
       createdBy: req.user._id,
@@ -903,6 +991,27 @@ router.put('/startup/:id/finish', authenticateStartup, async (req, res, next) =>
     if (sprint.status === 'completed') {
       return res.json({ success: true, message: 'Sprint already completed' });
     }
+
+    // Check all tasks for this sprint are completed
+    const Task = require('../models/Task');
+    const tasks = await Task.find({ sprintId: sprint._id, isArchived: { $ne: true } });
+    const allTasksDone = tasks.length > 0 && tasks.every(task => task.status === 'done');
+    const isSprintComplete = sprint.progress && sprint.progress.percentage === 100;
+
+    if (!allTasksDone || !isSprintComplete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot complete sprint: All tasks must be completed and sprint progress must be 100%.',
+        data: {
+          allTasksDone,
+          isSprintComplete,
+          totalTasks: tasks.length,
+          doneTasks: tasks.filter(t => t.status === 'done').length,
+          progress: sprint.progress ? sprint.progress.percentage : 0
+        }
+      });
+    }
+
     sprint.status = 'completed';
     sprint.endDate = new Date();
     sprint.timeline.completedAt = new Date();

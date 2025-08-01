@@ -81,8 +81,7 @@ router.get('/', authenticateStartup, async (req, res, next) => {
     const questionnaires = await Questionnaire.find(query)
       .sort({ createdAt: -1 })
       .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .populate('reviewedBy', 'profile.firstName profile.lastName email');
+      .skip((page - 1) * limit);
     
     const total = await Questionnaire.countDocuments(query);
     
@@ -96,10 +95,10 @@ router.get('/', authenticateStartup, async (req, res, next) => {
           serviceSelection: q.serviceSelection,
           status: q.status,
           submittedAt: q.submittedAt,
-          reviewedAt: q.reviewedAt,
-          reviewedBy: q.reviewedBy,
-          adminNotes: q.adminNotes,
-          rejectionReason: q.rejectionReason,
+          reviewedAt: q.review?.reviewedAt,
+          reviewedBy: q.review?.reviewedBy,
+          adminNotes: q.review?.adminNotes,
+          rejectionReason: q.review?.rejectionReason,
           trackingId: q._id.toString().slice(-8).toUpperCase()
         })),
         pagination: {
@@ -124,7 +123,7 @@ router.get('/:id', authenticateStartup, async (req, res, next) => {
     const questionnaire = await Questionnaire.findOne({
       _id: req.params.id,
       startupId: req.user._id
-    }).populate('reviewedBy', 'profile.firstName profile.lastName email');
+    });
     
     if (!questionnaire) {
       return next(new AppError('Questionnaire not found', 404, 'QUESTIONNAIRE_NOT_FOUND'));
@@ -140,10 +139,10 @@ router.get('/:id', authenticateStartup, async (req, res, next) => {
           serviceSelection: questionnaire.serviceSelection,
           status: questionnaire.status,
           submittedAt: questionnaire.submittedAt,
-          reviewedAt: questionnaire.reviewedAt,
-          reviewedBy: questionnaire.reviewedBy,
-          adminNotes: questionnaire.adminNotes,
-          rejectionReason: questionnaire.rejectionReason,
+          reviewedAt: questionnaire.review?.reviewedAt,
+          reviewedBy: questionnaire.review?.reviewedBy,
+          adminNotes: questionnaire.review?.adminNotes,
+          rejectionReason: questionnaire.review?.rejectionReason,
           trackingId: questionnaire._id.toString().slice(-8).toUpperCase()
         }
       }
@@ -240,11 +239,14 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
     const sort = {};
     sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+    // Populate sprint for each questionnaire (using sprintId if present, else by matching questionnaire._id to sprint.questionnaireId)
+    const Sprint = require('../models/Sprint');
     const questionnaires = await Questionnaire.find(query)
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .populate('startupId', 'email profile.founderFirstName profile.founderLastName profile.companyName profile.phone');
+      .populate('startupId', 'email profile.founderFirstName profile.founderLastName profile.companyName profile.phone')
+      .populate('sprintId');
 
     const total = await Questionnaire.countDocuments(query);
 
@@ -253,31 +255,55 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
       { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
 
+    // For questionnaires without sprintId, try to find a sprint by questionnaireId
+    const sprintMap = {};
+    const missingSprintQs = [];
+    questionnaires.forEach(q => {
+      if (!q.sprintId) missingSprintQs.push(q._id);
+    });
+    if (missingSprintQs.length > 0) {
+      const sprints = await Sprint.find({ questionnaireId: { $in: missingSprintQs } });
+      sprints.forEach(s => {
+        sprintMap[s.questionnaireId.toString()] = s;
+      });
+    }
+
     res.json({
       success: true,
       data: {
-        questionnaires: questionnaires.map(q => ({
-          id: q._id,
-          startup: {
-            id: q.startupId?._id,
-            name: q.startupId
-              ? q.startupId.profile.founderFirstName + ' ' + q.startupId.profile.founderLastName
-              : '',
-            email: q.startupId?.email,
-            company: q.startupId?.profile?.companyName,
-            phone: q.startupId?.profile?.phone
-          },
-          basicInfo: q.basicInfo,
-          requirements: q.requirements,
-          serviceSelection: q.serviceSelection,
-          status: q.status,
-          submittedAt: q.submittedAt,
-          reviewedAt: q.reviewedAt,
-          // reviewedBy removed
-          adminNotes: q.adminNotes,
-          trackingId: q._id.toString().slice(-8).toUpperCase(),
-          priorityScore: q.priorityScore
-        })),
+        questionnaires: questionnaires.map(q => {
+          // Prefer populated sprintId, else fallback to sprintMap
+          const sprint = q.sprintId || sprintMap[q._id.toString()];
+          return {
+            id: q._id,
+            startup: {
+              id: q.startupId?._id,
+              name: q.startupId
+                ? q.startupId.profile.founderFirstName + ' ' + q.startupId.profile.founderLastName
+                : '',
+              email: q.startupId?.email,
+              company: q.startupId?.profile?.companyName,
+              phone: q.startupId?.profile?.phone
+            },
+            basicInfo: q.basicInfo,
+            requirements: q.requirements,
+            serviceSelection: q.serviceSelection,
+            status: q.status,
+            submittedAt: q.submittedAt,
+            reviewedAt: q.reviewedAt,
+            adminNotes: q.adminNotes,
+            trackingId: q._id.toString().slice(-8).toUpperCase(),
+            priorityScore: q.priorityScore,
+            sprint: sprint
+              ? {
+                  id: sprint._id,
+                  status: sprint.status,
+                  selectedPackage: sprint.selectedPackage,
+                  selectedPackagePaymentStatus: sprint.selectedPackagePaymentStatus
+                }
+              : null
+          };
+        }),
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(total / limit),
@@ -381,6 +407,20 @@ router.post('/admin/:id/create-sprint', authenticateAdmin, async (req, res, next
       questionnaire.startupId._id,
       { 'onboarding.currentStep': 'sprint_selection' }
     );
+
+    // Send sprint assignment email to startup
+    try {
+      await sendEmail({
+        to: questionnaire.startupId.email,
+        template: 'sprintAssigned',
+        data: {
+          name: `${questionnaire.startupId.profile.founderFirstName} ${questionnaire.startupId.profile.founderLastName}`,
+          dashboardUrl: process.env.FRONTEND_URL + '/dashboard'
+        }
+      });
+    } catch (emailError) {
+      logger.logError('Sprint assignment email failed', emailError, { email: questionnaire.startupId.email });
+    }
 
     res.json({
       success: true,
@@ -830,6 +870,69 @@ router.post('/:id/upload-file', authenticateStartup, upload.single('file'), asyn
           url: fileUrl,
           originalName: req.file ? req.file.originalname : 'brand-guidelines.pdf'
         }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   POST /api/questionnaires/:id/schedule-meeting
+ * @desc    Mark questionnaire as meeting scheduled (Startup)
+ * @access  Private (Startup)
+ */
+router.post('/:id/schedule-meeting', authenticateStartup, async (req, res, next) => {
+  try {
+    const questionnaire = await Questionnaire.findOne({
+      _id: req.params.id,
+      startupId: req.user._id
+    });
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'Questionnaire not found' });
+    }
+    // Only allow if not already scheduled or sprint created
+    if (questionnaire.status === 'meeting_scheduled' || questionnaire.status === 'sprint_created') {
+      return res.status(400).json({ success: false, message: 'Meeting already scheduled or sprint already created.' });
+    }
+    questionnaire.status = 'meeting_scheduled';
+    await questionnaire.save();
+    res.json({
+      success: true,
+      message: 'Meeting scheduled successfully.',
+      data: {
+        questionnaire: {
+          id: questionnaire._id,
+          status: questionnaire.status,
+          submittedAt: questionnaire.submittedAt,
+          trackingId: questionnaire._id.toString().slice(-8).toUpperCase()
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /api/questionnaires/admin/:id/with-sprint
+ * @desc    Get questionnaire with associated sprint (Admin)
+ * @access  Private (Admin)
+ */
+router.get('/admin/:id/with-sprint', authenticateAdmin, async (req, res, next) => {
+  try {
+    const questionnaire = await Questionnaire.findById(req.params.id)
+      .populate('startupId', 'profile.founderFirstName profile.founderLastName profile.companyName email');
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'Questionnaire not found' });
+    }
+    const Sprint = require('../models/Sprint');
+    const sprint = await Sprint.findOne({ questionnaireId: questionnaire._id });
+    res.json({
+      success: true,
+      data: {
+        questionnaire,
+        sprint
       }
     });
   } catch (error) {
