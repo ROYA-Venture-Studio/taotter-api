@@ -441,7 +441,7 @@ router.post('/forgot-password',
     if (process.env.ENABLE_EMAIL_VERIFICATION === 'true') {
       try {
         const resetURL = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-        await sendEmail({
+        sendEmail({
           to: user.email,
           subject: 'Password Reset Request',
           template: 'passwordReset',
@@ -450,7 +450,7 @@ router.post('/forgot-password',
             resetURL,
             expiresIn: '10 minutes'
           }
-        });
+        }).catch(err => logger.logError(err, 'Async Email Send'));
       } catch (error) {
         logger.logError(error, 'Password Reset Email');
         user.authentication.passwordResetToken = undefined;

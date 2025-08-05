@@ -58,7 +58,7 @@ const questionnaireSchema = new mongoose.Schema({
         'mvp',
         'validation',
         'early-stage',
-        'growth-stage',
+        'growth',
         'scaling'
       ],
       index: true

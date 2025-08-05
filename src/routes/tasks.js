@@ -41,7 +41,7 @@ router.post('/', authenticateAdmin, async (req, res, next) => {
       watchers: watchers || [],
       createdBy: req.user._id,
       createdByModel: 'Admin',
-      status: 'todo',
+      status: req.body.status || 'todo',
       history: [{
         action: 'created',
         performedBy: req.user._id,
@@ -120,7 +120,18 @@ router.post('/:id/move', authenticateAdmin, async (req, res, next) => {
     // Actually move the task
     task.columnId = columnId;
     task.position = position;
-    
+
+    // Update status based on target column name
+    const board = await Board.findById(task.boardId);
+    const targetColumn = board.columns.id(columnId);
+    if (targetColumn && targetColumn.name) {
+      const name = targetColumn.name.toLowerCase().replace(/\s/g, "");
+      if (name.includes("progress")) task.status = "in_progress";
+      else if (name.includes("review")) task.status = "review";
+      else if (name.includes("done") || name.includes("complete")) task.status = "done";
+      else task.status = "todo";
+    }
+
     // Add history entry (using the correct field name from the model)
     // Initialize history array if it doesn't exist (for older tasks)
     if (!task.history) {
@@ -134,7 +145,8 @@ router.post('/:id/move', authenticateAdmin, async (req, res, next) => {
       changes: {
         from: oldColumnId,
         to: columnId,
-        position: position
+        position: position,
+        status: task.status
       },
       timestamp: new Date()
     });

@@ -80,14 +80,30 @@ router.get('/list', authenticateAnyUser, async (req, res, next) => {
 
 /**
  * @route   GET /api/chat/:chatId/messages
- * @desc    Get messages for a chat
+ * @desc    Get messages for a chat (from Chat.messages array)
  * @access  Private (admin or startup)
+ * @query   ?page=1&pageSize=50
  */
 router.get('/:chatId/messages', authenticateAnyUser, async (req, res, next) => {
   try {
     const { chatId } = req.params;
-    const messages = await Message.find({ chatId }).sort({ createdAt: 1 });
-    res.json({ success: true, data: { messages } });
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 50;
+    const chat = await Chat.findById(chatId);
+    if (!chat) return next(new AppError('Chat not found', 404));
+    const totalMessages = chat.messages.length;
+    const start = Math.max(totalMessages - page * pageSize, 0);
+    const end = totalMessages - (page - 1) * pageSize;
+    const messages = chat.messages.slice(start, end);
+    res.json({
+      success: true,
+      data: {
+        messages,
+        totalMessages,
+        page,
+        pageSize
+      }
+    });
   } catch (error) {
     next(error);
   }
@@ -97,72 +113,101 @@ router.get('/:chatId/messages', authenticateAnyUser, async (req, res, next) => {
  * @route   POST /api/chat/:chatId/message
  * @desc    Send a message in a chat (admin or startup)
  * @access  Private
- * @body    { content, file }
+ * @body    { content, file, voice }
  */
 router.post('/:chatId/message', authenticateAnyUser, upload.single('file'), async (req, res, next) => {
   try {
     const { chatId } = req.params;
-    const { content } = req.body;
+    const { content, voiceDuration } = req.body;
     let senderType, senderId;
     if (req.user && (req.user.role === 'admin' || req.user.role === 'super_admin')) {
       senderType = 'admin';
       senderId = req.user._id;
     } else if (req.user && req.user.profile) {
-      // Startup user
       senderType = 'startup';
       senderId = req.user._id;
     } else {
       return next(new AppError('Unauthorized', 401));
     }
 
-    // Dummy file/image URL for now
-    let fileUrl = null, fileType = null, imageUrl = null;
+    // File/image/voice upload handling
+    let fileUrl = null, fileType = null, imageUrl = null, fileName = null, fileSize = null, mimeType = null, messageType = "text";
     if (req.file) {
-      if (req.file.mimetype.startsWith('image/')) {
-        imageUrl = `https://dummy-s3-bucket.s3.amazonaws.com/${req.file.filename}`;
+      fileName = req.file.originalname;
+      fileSize = req.file.size;
+      mimeType = req.file.mimetype;
+      if (fileSize > 5 * 1024 * 1024) {
+        return next(new AppError('File size exceeds 5MB limit', 400));
+      }
+      // Upload to Azure
+      const { uploadFile } = require('../utils/azureStorage');
+      const userId = senderId;
+      const sprintId = "chat"; // Use "chat" as sprintId for chat uploads
+      const documentType = mimeType.startsWith('image/') ? "images" : (mimeType.startsWith('audio/') ? "audio" : "files");
+      // Read file buffer from disk
+      const fs = require('fs');
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const azureResult = await uploadFile(
+        { buffer: fileBuffer, originalname: fileName, mimetype: mimeType },
+        userId,
+        sprintId,
+        documentType
+      );
+      if (!azureResult.success) {
+        return next(new AppError('Azure upload failed: ' + azureResult.error, 500));
+      }
+      // Remove local file after upload
+      fs.unlinkSync(req.file.path);
+      if (mimeType.startsWith('image/')) {
+        imageUrl = azureResult.fileUrl;
+        fileUrl = azureResult.fileUrl;
+        messageType = "image";
+      } else if (mimeType.startsWith('audio/')) {
+        fileUrl = azureResult.fileUrl;
+        messageType = "voice";
       } else {
-        fileUrl = `https://dummy-s3-bucket.s3.amazonaws.com/${req.file.filename}`;
-        fileType = req.file.mimetype;
+        fileUrl = azureResult.fileUrl;
+        messageType = "file";
       }
     }
 
-    const message = new Message({
-      chatId,
+    // Build message object for Chat.messages array
+    const messageObj = {
       senderType,
       senderId,
+      messageType,
       content,
       fileUrl,
-      fileType,
+      fileName,
+      fileSize,
+      mimeType,
       imageUrl,
+      voiceDuration: messageType === "voice" ? Number(voiceDuration) || null : null,
       createdAt: new Date()
-    });
-    await message.save();
+    };
 
-    // Update chat lastMessageAt
-    await Chat.findByIdAndUpdate(chatId, { lastMessageAt: new Date() });
+    // Push message to chat's messages array
+    const chat = await Chat.findById(chatId);
+    if (!chat) return next(new AppError('Chat not found', 404));
+    chat.messages.push(messageObj);
+    chat.lastMessageAt = new Date();
+    await chat.save();
 
     // Emit socket event for real-time update
     try {
       const io = req.app.get('io');
       if (io) {
         io.to(`conversation:${chatId}`).emit('new_message', {
-          _id: message._id,
-          conversationId: chatId,
-          senderId,
-          senderType,
-          content,
-          fileUrl,
-          fileType,
-          imageUrl,
-          messageType: fileUrl || imageUrl ? 'file' : 'text',
-          createdAt: message.createdAt
+          ...messageObj,
+          _id: chat.messages[chat.messages.length - 1]._id,
+          conversationId: chatId
         });
       }
     } catch (e) {
       // Ignore socket errors
     }
 
-    res.json({ success: true, data: { message } });
+    res.json({ success: true, data: { message: messageObj } });
   } catch (error) {
     next(error);
   }
