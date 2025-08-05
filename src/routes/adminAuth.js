@@ -287,7 +287,7 @@ router.post('/invite', authenticateSuperAdmin, validate(inviteAdminSchema), asyn
     // Send invitation email
     try {
       const inviteUrl = `${process.env.ADMIN_FRONTEND_URL}/admin/setup-account?token=${inviteToken}`;
-      await sendEmail({
+      sendEmail({
         to: email,
         subject: 'Invitation to Join Taotter Admin Panel',
         template: 'admin-invite',
@@ -298,7 +298,7 @@ router.post('/invite', authenticateSuperAdmin, validate(inviteAdminSchema), asyn
           role: admin.role,
           department: admin.profile.department
         }
-      });
+      }).catch(err => logger.logError(err, 'Async Email Send'));
     } catch (emailError) {
       // Delete the admin if email fails
       await Admin.findByIdAndDelete(admin._id);
@@ -431,7 +431,7 @@ router.post('/create',
     
     // Send welcome email
     try {
-      await sendEmail({
+      sendEmail({
         to: email,
         subject: 'Welcome to Taotter Admin Panel',
         template: 'admin-welcome',
@@ -442,7 +442,7 @@ router.post('/create',
           role: admin.role,
           department: admin.profile.department
         }
-      });
+      }).catch(err => logger.logError(err, 'Async Email Send'));
     } catch (emailError) {
       logger.logError('Admin welcome email failed', emailError);
       // Don't fail the request if email fails
@@ -500,7 +500,7 @@ router.post('/forgot-password', async (req, res, next) => {
     // Send reset email
     try {
       const resetUrl = `${process.env.ADMIN_FRONTEND_URL}/admin/reset-password?token=${resetToken}`;
-      await sendEmail({
+      sendEmail({
         to: email,
         subject: 'Admin Password Reset Request',
         template: 'admin-password-reset',
@@ -508,7 +508,7 @@ router.post('/forgot-password', async (req, res, next) => {
           adminName: admin.fullName,
           resetUrl
         }
-      });
+      }).catch(err => logger.logError(err, 'Async Email Send'));
     } catch (emailError) {
       admin.authentication.passwordResetToken = undefined;
       admin.authentication.passwordResetExpires = undefined;

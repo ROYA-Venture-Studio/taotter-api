@@ -8,6 +8,15 @@ require('dotenv').config();
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const AZURE_STORAGE_CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME;
 
+if (!AZURE_STORAGE_CONNECTION_STRING) {
+  console.error('AZURE_STORAGE_CONNECTION_STRING is not defined. Check your environment variables.');
+  throw new Error('AZURE_STORAGE_CONNECTION_STRING is not defined.');
+}
+if (!AZURE_STORAGE_CONTAINER_NAME) {
+  console.error('AZURE_STORAGE_CONTAINER_NAME is not defined. Check your environment variables.');
+  throw new Error('AZURE_STORAGE_CONTAINER_NAME is not defined.');
+}
+
 // Initialize BlobServiceClient
 const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
 const containerClient = blobServiceClient.getContainerClient(AZURE_STORAGE_CONTAINER_NAME);

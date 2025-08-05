@@ -86,36 +86,36 @@ router.post('/register', validate(registerSchema), async (req, res, next) => {
     
     // Send welcome email (Azure Communication Services)
     try {
-      await sendEmail({
+      sendEmail({
         to: email,
         template: 'signupSuccess',
         data: {
           name: `${profile.founderFirstName} ${profile.founderLastName}`,
           dashboardUrl: process.env.FRONTEND_URL + '/dashboard'
         }
-      });
+      }).catch(err => logger.logError(err, 'Async Email Send'));
     } catch (emailError) {
       logger.logError('Welcome email sending failed during registration', emailError, { email });
     }
 
     // Send verification email (legacy, if enabled)
-    if (process.env.ENABLE_EMAIL_VERIFICATION === 'true') {
-      try {
-        const verificationUrl = `${process.env.FRONTEND_URL}/startup/verify-email?token=${emailVerificationToken}`;
-        await sendEmail({
-          to: email,
-          subject: 'Welcome to Taotter - Verify Your Email',
-          template: 'startup-welcome',
-          data: {
-            founderName: startup.founderFullName,
-            verificationUrl,
-            companyName: profile.companyName || 'your startup'
-          }
-        });
-      } catch (emailError) {
-        logger.logError('Email sending failed during registration', emailError, { email });
-      }
-    }
+    // if (process.env.ENABLE_EMAIL_VERIFICATION === 'true') {
+    //   try {
+    //     const verificationUrl = `${process.env.FRONTEND_URL}/startup/verify-email?token=${emailVerificationToken}`;
+    //     await sendEmail({
+    //       to: email,
+    //       subject: 'Welcome to Taotter - Verify Your Email',
+    //       template: 'startup-welcome',
+    //       data: {
+    //         founderName: startup.founderFullName,
+    //         verificationUrl,
+    //         companyName: profile.companyName || 'your startup'
+    //       }
+    //     });
+    //   } catch (emailError) {
+    //     logger.logError('Email sending failed during registration', emailError, { email });
+    //   }
+    // }
     
     // Log successful registration
     logger.logAuth('STARTUP_REGISTER_SUCCESS', email, req.ip);

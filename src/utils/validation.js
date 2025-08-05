@@ -118,7 +118,7 @@ const questionnaireSchemas = {
         'mvp',
         'validation',
         'early-stage',
-        'growth-stage',
+        'growth',
         'scaling'
       ).required(),
       keyGoals: Joi.string().trim().min(10).max(1000).required(),
