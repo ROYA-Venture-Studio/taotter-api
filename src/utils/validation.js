@@ -90,6 +90,11 @@ const sprintSchemas = {
 
   selectPackage: Joi.object({
     packageId: Joi.string().required()
+  }),
+
+  // Add deliverables validation for sprint creation/update
+  createOrUpdate: Joi.object({
+    deliverables: Joi.array().items(Joi.string().trim().min(1)).optional()
   })
 };
 
@@ -98,19 +103,7 @@ const questionnaireSchemas = {
   create: Joi.object({
     basicInfo: Joi.object({
       startupName: Joi.string().trim().min(1).max(100).required(),
-      taskType: Joi.string().valid(
-        'mvp-development',
-        'idea-validation',
-        'market-research',
-        'branding-design',
-        'business-planning',
-        'funding-preparation',
-        'technical-consulting',
-        'custom',
-        'idea',
-        'validation',
-        'growth'
-      ).required(),
+      taskType: Joi.string().trim().min(1).max(100).required(),
       taskDescription: Joi.string().trim().min(10).max(2000).required(),
       startupStage: Joi.string().valid(
         'idea',
@@ -143,7 +136,7 @@ const questionnaireSchemas = {
 
     serviceSelection: Joi.object({
       selectedService: Joi.string().trim().allow('').optional(),
-      customRequest: Joi.string().trim().max(1000).optional(),
+      // customRequest: Joi.string().trim().max(1000).optional(),
       isCustom: Joi.boolean().optional(),
       urgency: Joi.string().valid('low', 'medium', 'high', 'urgent').optional()
     }).optional()
@@ -152,16 +145,7 @@ const questionnaireSchemas = {
   update: Joi.object({
     basicInfo: Joi.object({
       startupName: Joi.string().trim().min(1).max(100).optional(),
-      taskType: Joi.string().valid(
-        'mvp-development',
-        'idea-validation',
-        'market-research',
-        'branding-design',
-        'business-planning',
-        'funding-preparation',
-        'technical-consulting',
-        'custom'
-      ).optional(),
+      taskType: Joi.string().trim().min(1).max(100).optional(),
       taskDescription: Joi.string().trim().min(10).max(2000).optional(),
       startupStage: Joi.string().valid(
         'idea',
@@ -212,7 +196,7 @@ const questionnaireSchemas = {
 
     serviceSelection: Joi.object({
       selectedService: Joi.string().trim().optional(),
-      customRequest: Joi.string().trim().max(1000).optional(),
+      // customRequest: Joi.string().trim().max(1000).optional(),
       isCustom: Joi.boolean().optional(),
       urgency: Joi.string().valid('low', 'medium', 'high', 'urgent').optional()
     }).optional()
@@ -265,7 +249,8 @@ const taskSchemas = {
           isCompleted: Joi.boolean().optional()
         })
       ).optional()
-    }).optional()
+    }).optional(),
+    deliverables: Joi.array().items(Joi.string().trim()).optional()
   }),
 
   update: Joi.object({

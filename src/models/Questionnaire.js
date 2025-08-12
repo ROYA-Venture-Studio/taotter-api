@@ -30,16 +30,6 @@ const questionnaireSchema = new mongoose.Schema({
     taskType: {
       type: String,
       required: [true, 'Task type is required'],
-      enum: [
-        'mvp-development',
-        'idea-validation',
-        'market-research',
-        'branding-design',
-        'business-planning',
-        'funding-preparation',
-        'technical-consulting',
-        'custom'
-      ],
       index: true
     },
     taskDescription: {
@@ -224,27 +214,6 @@ const questionnaireSchema = new mongoose.Schema({
     }
   },
   
-  // Analytics and tracking
-  analytics: {
-    timeSpent: {
-      step1: { type: Number, default: 0 }, // in seconds
-      step2: { type: Number, default: 0 },
-      step3: { type: Number, default: 0 },
-      total: { type: Number, default: 0 }
-    },
-    viewCount: {
-      type: Number,
-      default: 0
-    },
-    lastViewedAt: Date,
-    deviceInfo: {
-      userAgent: String,
-      platform: String,
-      browser: String
-    },
-    ipAddress: String
-  },
-  
   // Versioning for revisions
   version: {
     type: Number,
@@ -256,57 +225,6 @@ const questionnaireSchema = new mongoose.Schema({
     ref: 'Questionnaire'
   },
   
-  // Tags for categorization
-  tags: [{
-    name: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    color: String,
-    category: {
-      type: String,
-      enum: ['auto', 'manual', 'admin'],
-      default: 'auto'
-    }
-  }],
-  
-  // Internal notes and flags
-  internalNotes: [{
-    adminId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Admin',
-      required: true
-    },
-    note: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    isPrivate: {
-      type: Boolean,
-      default: true
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  
-  flags: {
-    isHighPriority: {
-      type: Boolean,
-      default: false
-    },
-    requiresSpecialAttention: {
-      type: Boolean,
-      default: false
-    },
-    hasComplexRequirements: {
-      type: Boolean,
-      default: false
-    }
-  }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -323,83 +241,8 @@ questionnaireSchema.index({ 'review.reviewedBy': 1 });
 questionnaireSchema.index({ 'review.assignedAdminId': 1 });
 questionnaireSchema.index({ submittedAt: -1 });
 questionnaireSchema.index({ 'serviceSelection.urgency': 1 });
-questionnaireSchema.index({ 'flags.isHighPriority': 1 });
 
-// Virtual for estimated budget value (for sorting/analytics)
-questionnaireSchema.virtual('estimatedBudgetValue').get(function() {
-  const budgetMap = {
-    'Under $5,000': 2500,
-    '$5,000 - $10,000': 7500,
-    '$10,000 - $25,000': 17500,
-    '$25,000 - $50,000': 37500,
-    '$50,000 - $100,000': 75000,
-    'Over $100,000': 150000
-  };
-  return budgetMap[this.requirements?.budgetRange] || 0;
-});
 
-// Virtual for time to completion
-questionnaireSchema.virtual('timeToComplete').get(function() {
-  if (!this.progress.isCompleted || !this.createdAt || !this.progress.completedAt) {
-    return null;
-  }
-  return Math.round((this.progress.completedAt - this.createdAt) / (1000 * 60)); // in minutes
-});
-
-// Virtual for review turnaround time
-questionnaireSchema.virtual('reviewTurnaroundTime').get(function() {
-  if (!this.submittedAt || !this.review.reviewedAt) {
-    return null;
-  }
-  return Math.round((this.review.reviewedAt - this.submittedAt) / (1000 * 60 * 60)); // in hours
-});
-
-// Virtual for days since submission
-questionnaireSchema.virtual('daysSinceSubmission').get(function() {
-  if (!this.submittedAt) return null;
-  return Math.floor((Date.now() - this.submittedAt) / (1000 * 60 * 60 * 24));
-});
-
-// Pre-save middleware to update progress
-questionnaireSchema.pre('save', function(next) {
-  // Update completion percentage based on filled steps
-  let filledSteps = 0;
-  
-  if (this.basicInfo?.startupName && this.basicInfo?.taskType && this.basicInfo?.taskDescription) {
-    filledSteps++;
-  }
-  if (this.requirements?.timeline && this.requirements?.budgetRange) {
-    filledSteps++;
-  }
-  if (this.serviceSelection && (this.serviceSelection.selectedService || this.serviceSelection.customRequest)) {
-    filledSteps++;
-  }
-  
-  this.progress.completionPercentage = Math.round((filledSteps / 3) * 100);
-  
-  // Mark as completed if all steps are filled
-  if (filledSteps === 3 && !this.progress.isCompleted) {
-    this.progress.isCompleted = true;
-    this.progress.completedAt = new Date();
-    this.progress.currentStep = 3;
-  }
-  
-  // Auto-generate tags based on content
-  this.generateAutoTags();
-  
-  next();
-});
-
-// Pre-save middleware to update analytics
-questionnaireSchema.pre('save', function(next) {
-  if (this.isModified('analytics.timeSpent')) {
-    this.analytics.timeSpent.total = 
-      this.analytics.timeSpent.step1 + 
-      this.analytics.timeSpent.step2 + 
-      this.analytics.timeSpent.step3;
-  }
-  next();
-});
 
 // Instance method to submit questionnaire
 questionnaireSchema.methods.submit = function() {
@@ -413,23 +256,6 @@ questionnaireSchema.methods.submit = function() {
   return this.save();
 };
 
-// Instance method to update step progress
-questionnaireSchema.methods.updateStepProgress = function(step, timeSpent = 0) {
-  this.progress.currentStep = Math.max(this.progress.currentStep, step);
-  
-  // Add to completed steps if not already there
-  const existingStep = this.progress.completedSteps.find(s => s.step === step);
-  if (!existingStep) {
-    this.progress.completedSteps.push({ step });
-  }
-  
-  // Update time spent
-  if (timeSpent > 0) {
-    this.analytics.timeSpent[`step${step}`] += timeSpent;
-  }
-  
-  return this.save();
-};
 
 // Instance method to assign to admin
 questionnaireSchema.methods.assignToAdmin = function(adminId) {
@@ -497,71 +323,6 @@ questionnaireSchema.methods.createRevision = function() {
   return revision.save();
 };
 
-// Instance method to add internal note
-questionnaireSchema.methods.addInternalNote = function(adminId, note, isPrivate = true) {
-  this.internalNotes.push({
-    adminId,
-    note,
-    isPrivate
-  });
-  
-  return this.save();
-};
-
-// Instance method to generate auto tags
-questionnaireSchema.methods.generateAutoTags = function() {
-  const autoTags = [];
-  
-  // Remove existing auto tags
-  this.tags = this.tags.filter(tag => tag.category !== 'auto');
-  
-  // Add task type tag
-  if (this.basicInfo?.taskType) {
-    autoTags.push({
-      name: this.basicInfo.taskType.replace('-', ' ').toUpperCase(),
-      category: 'auto',
-      color: '#3b82f6'
-    });
-  }
-  
-  // Add startup stage tag
-  if (this.basicInfo?.startupStage) {
-    autoTags.push({
-      name: this.basicInfo.startupStage.replace('-', ' ').toUpperCase(),
-      category: 'auto',
-      color: '#10b981'
-    });
-  }
-  
-  // Add budget range tag
-  if (this.requirements?.budgetRange) {
-    autoTags.push({
-      name: this.requirements.budgetRange,
-      category: 'auto',
-      color: '#f59e0b'
-    });
-  }
-  
-  // Add urgency tag
-  if (this.serviceSelection?.urgency && this.serviceSelection.urgency !== 'medium') {
-    autoTags.push({
-      name: `${this.serviceSelection.urgency.toUpperCase()} PRIORITY`,
-      category: 'auto',
-      color: this.serviceSelection.urgency === 'urgent' ? '#ef4444' : '#f97316'
-    });
-  }
-  
-  // Add high value tag for large budgets
-  if (this.estimatedBudgetValue > 50000) {
-    autoTags.push({
-      name: 'HIGH VALUE',
-      category: 'auto',
-      color: '#8b5cf6'
-    });
-  }
-  
-  this.tags.push(...autoTags);
-};
 
 // Static method to find questionnaires by status
 questionnaireSchema.statics.findByStatus = function(status, options = {}) {
@@ -576,51 +337,6 @@ questionnaireSchema.statics.findByStatus = function(status, options = {}) {
     .skip((page - 1) * limit);
 };
 
-// Static method to get questionnaire statistics
-questionnaireSchema.statics.getStatistics = async function(filters = {}) {
-  const matchStage = {};
-  
-  if (filters.dateRange) {
-    matchStage.createdAt = {
-      $gte: new Date(filters.dateRange.start),
-      $lte: new Date(filters.dateRange.end)
-    };
-  }
-  
-  if (filters.status) {
-    matchStage.status = filters.status;
-  }
-  
-  if (filters.taskType) {
-    matchStage['basicInfo.taskType'] = filters.taskType;
-  }
-  
-  const stats = await this.aggregate([
-    { $match: matchStage },
-    {
-      $group: {
-        _id: null,
-        total: { $sum: 1 },
-        submitted: { $sum: { $cond: [{ $eq: ['$status', 'submitted'] }, 1, 0] } },
-        underReview: { $sum: { $cond: [{ $eq: ['$status', 'under_review'] }, 1, 0] } },
-        approved: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } },
-        rejected: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } },
-        avgCompletionTime: { $avg: '$analytics.timeSpent.total' },
-        avgBudgetValue: { $avg: '$estimatedBudgetValue' }
-      }
-    }
-  ]);
-  
-  return stats[0] || {
-    total: 0,
-    submitted: 0,
-    underReview: 0,
-    approved: 0,
-    rejected: 0,
-    avgCompletionTime: 0,
-    avgBudgetValue: 0
-  };
-};
 
 // Static method to find pending reviews for admin
 questionnaireSchema.statics.findPendingReviews = function(adminId = null, options = {}) {

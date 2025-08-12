@@ -35,11 +35,6 @@ const startupSchema = new mongoose.Schema({
     select: false // Don't include password in queries by default
   },
   
-  googleId: {
-    type: String,
-    sparse: true,
-    unique: true
-  },
   
   // Startup-specific profile information
   profile: {
@@ -60,92 +55,9 @@ const startupSchema = new mongoose.Schema({
       trim: true,
       maxlength: [100, 'Company name cannot exceed 100 characters']
     },
-    founderTitle: {
-      type: String,
-      trim: true,
-      maxlength: [100, 'Founder title cannot exceed 100 characters'],
-      default: 'Founder'
-    },
     avatar: {
       type: String,
       default: null
-    },
-    timezone: {
-      type: String,
-      default: 'UTC'
-    },
-    linkedinProfile: {
-      type: String,
-      trim: true
-    },
-    website: {
-      type: String,
-      trim: true
-    },
-    industry: {
-      type: String,
-      enum: [
-        'technology',
-        'healthcare',
-        'fintech',
-        'e-commerce',
-        'education',
-        'entertainment',
-        'real-estate',
-        'agriculture',
-        'manufacturing',
-        'consulting',
-        'other'
-      ]
-    },
-    fundingStage: {
-      type: String,
-      enum: [
-        'idea',
-        'pre-seed',
-        'seed',
-        'series-a',
-        'series-b',
-        'series-c+',
-        'bootstrapped'
-      ]
-    },
-    teamSize: {
-      type: String,
-      enum: [
-        '1',
-        '2-5',
-        '6-10',
-        '11-25',
-        '26-50',
-        '50+'
-      ]
-    },
-    preferences: {
-      notifications: {
-        email: {
-          type: Boolean,
-          default: true
-        },
-        sms: {
-          type: Boolean,
-          default: true
-        },
-        push: {
-          type: Boolean,
-          default: true
-        }
-      },
-      theme: {
-        type: String,
-        enum: ['light', 'dark'],
-        default: 'light'
-      },
-      communicationPreference: {
-        type: String,
-        enum: ['email', 'phone', 'video-call', 'in-person'],
-        default: 'email'
-      }
     }
   },
   
@@ -195,7 +107,7 @@ const startupSchema = new mongoose.Schema({
   
   status: {
     type: String,
-    enum: ['active', 'inactive', 'suspended', 'pending'],
+    enum: ['active', 'inactive', 'suspended', 'pending','verified'],
     default: 'pending' // Pending until email verification
   },
   
@@ -226,85 +138,11 @@ const startupSchema = new mongoose.Schema({
   },
   
   // Startup metrics and tracking
-  engagement: {
-    lastActiveAt: {
-      type: Date,
-      default: Date.now
-    },
-    totalSessions: {
-      type: Number,
-      default: 0
-    },
-    questionnairesSubmitted: {
-      type: Number,
-      default: 0
-    },
-    tasksCompleted: {
-      type: Number,
-      default: 0
-    }
-  },
   
   // Sprint documents and uploads
-  sprintDocuments: [{
-    sprintId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Sprint',
-      required: true
-    },
-    fileName: {
-      type: String,
-      required: true
-    },
-    originalName: {
-      type: String,
-      required: true
-    },
-    fileUrl: {
-      type: String,
-      required: true
-    },
-    fileType: {
-      type: String,
-      required: true
-    },
-    documentType: {
-      type: String,
-      enum: ['brandGuidelines', 'contactLists', 'appDemo', 'other'],
-      required: true
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
   
   // Admin assignments and notes
-  assignedAdminId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin'
-  },
-  
-  adminNotes: [{
-    adminId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Admin',
-      required: true
-    },
-    note: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    isPrivate: {
-      type: Boolean,
-      default: true
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now
-    }
-  }]
+
 }, {
   timestamps: true,
   toJSON: { 

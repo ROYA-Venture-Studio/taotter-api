@@ -4,6 +4,7 @@ const Task = require('../models/Task');
 const Sprint = require('../models/Sprint');
 const { AppError } = require('../middleware/errorHandler');
 const { authenticateAdmin } = require('../middleware/auth');
+const requireSprintPayment = require('../middleware/requireSprintPayment');
 const { validate } = require('../utils/validation');
 const logger = require('../utils/logger');
 
@@ -14,7 +15,7 @@ const router = express.Router();
 // @route   GET /api/boards/by-sprint/:sprintId
 // @desc    Get board by sprint ID (create if doesn't exist)
 // @access  Private (Admin)
-router.get('/by-sprint/:sprintId', authenticateAdmin, async (req, res, next) => {
+router.get('/by-sprint/:sprintId', authenticateAdmin, requireSprintPayment, async (req, res, next) => {
   try {
     const sprintId = req.params.sprintId;
     

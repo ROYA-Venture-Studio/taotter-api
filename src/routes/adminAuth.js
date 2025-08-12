@@ -136,13 +136,7 @@ router.post('/login', loginRateLimit, validate(userSchemas.login), async (req, r
           email: admin.email,
           profile: admin.profile,
           role: admin.role,
-          permissions: admin.permissions,
           status: admin.status,
-          workload: {
-            currentLoad: admin.workload.currentLoad,
-            maxCapacity: admin.workload.maxCapacity,
-            workloadPercentage: admin.workloadPercentage
-          }
         },
         tokens: {
           accessToken,
@@ -406,7 +400,6 @@ router.post('/create',
   validate(createAdminSchema), async (req, res, next) => {
   try {
     const { email, password, profile, role = 'admin' } = req.body;
-    console.log(req.body)
     // Check if admin already exists
     const existingAdmin = await Admin.findOne({ email });
     if (existingAdmin) {
