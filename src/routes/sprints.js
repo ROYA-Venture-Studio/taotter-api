@@ -343,6 +343,15 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
     });
     
     await sprint.save();
+
+    // Set all other sprints for this questionnaire to inactive
+    await Sprint.updateMany(
+      {
+        questionnaireId: sprint.questionnaireId,
+        _id: { $ne: sprint._id }
+      },
+      { $set: { status: 'inactive' } }
+    );
     
     // Update startup onboarding
     await Startup.findByIdAndUpdate(req.user._id, {
@@ -610,10 +619,15 @@ router.put('/admin/:sprintId/payment-status', authenticateAdmin, async (req, res
     // Update startup onboarding step if paid
     if (paymentStatus === 'paid' && startup) {
       try {
-        await Startup.findByIdAndUpdate(startup._id, {
+        // Set status to verified if currently pending
+        const update = {
           'onboarding.currentStep': 'active_sprint',
           'onboarding.lastUpdated': new Date()
-        });
+        };
+        if (startup.status === 'pending') {
+          update.status = 'verified';
+        }
+        await Startup.findByIdAndUpdate(startup._id, update);
       } catch (e) {
         logger.logError('Failed to update startup onboarding to active_sprint after payment', e, { startupId: startup._id });
       }
@@ -811,7 +825,13 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
     } = req.query;
 
     const query = {};
-    if (status && status !== "all") query.status = status;
+    // Exclude inactive sprints unless status filter is 'inactive'
+    if (status && status !== "all") {
+      query.status = status;
+    } else {
+      // When status is 'all', exclude inactive
+      query.status = { $ne: "inactive" };
+    }
     if (type) query.type = type;
 
     // Search by sprint name or startup name

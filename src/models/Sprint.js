@@ -163,9 +163,8 @@ const sprintSchema = new mongoose.Schema({
   questionnaireId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Questionnaire',
-    required: true,
-    unique: true
-  },
+    required: true
+    },
 
   // Sprint attachments block
   sprintDocuments: {
@@ -201,7 +200,8 @@ const sprintSchema = new mongoose.Schema({
       'in_progress',
       'on_hold',
       'completed',
-      'cancelled'
+      'cancelled',
+      'inactive'
     ],
     default: 'draft'
   },

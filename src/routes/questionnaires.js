@@ -254,16 +254,43 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
       { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
 
-    // For questionnaires without sprintId, try to find a sprint by questionnaireId
+    // For questionnaires without sprintId, find all sprints by questionnaireId and pick the highest-priority one
     const sprintMap = {};
     const missingSprintQs = [];
     questionnaires.forEach(q => {
       if (!q.sprintId) missingSprintQs.push(q._id);
     });
     if (missingSprintQs.length > 0) {
+      // Fetch all sprints for these questionnaires
       const sprints = await Sprint.find({ questionnaireId: { $in: missingSprintQs } });
+      // Group sprints by questionnaireId
+      const grouped = {};
       sprints.forEach(s => {
-        sprintMap[s.questionnaireId.toString()] = s;
+        const qid = s.questionnaireId.toString();
+        if (!grouped[qid]) grouped[qid] = [];
+        grouped[qid].push(s);
+      });
+      // Define status priority
+      const statusPriority = [
+        'paid',
+        'package_selected',
+        'documents_submitted',
+        'in_progress',
+        'available',
+        'draft',
+        'on_hold',
+        'completed',
+        'cancelled',
+        'inactive'
+      ];
+      // Pick the highest-priority sprint for each questionnaire
+      Object.entries(grouped).forEach(([qid, sprintsArr]) => {
+        sprintsArr.sort((a, b) => {
+          const aIdx = statusPriority.indexOf(a.status);
+          const bIdx = statusPriority.indexOf(b.status);
+          return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+        });
+        sprintMap[qid] = sprintsArr[0];
       });
     }
 

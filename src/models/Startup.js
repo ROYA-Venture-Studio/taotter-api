@@ -107,7 +107,7 @@ const startupSchema = new mongoose.Schema({
   
   status: {
     type: String,
-    enum: ['active', 'inactive', 'suspended', 'pending'],
+    enum: ['active', 'inactive', 'suspended', 'pending','verified'],
     default: 'pending' // Pending until email verification
   },
   
