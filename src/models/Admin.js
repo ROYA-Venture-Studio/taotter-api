@@ -39,188 +39,15 @@ const adminSchema = new mongoose.Schema({
     avatar: {
       type: String,
       default: null
-    },
-    jobTitle: {
-      type: String,
-      trim: true,
-      maxlength: [100, 'Job title cannot exceed 100 characters']
-    },
-    department: {
-      type: String,
-      enum: [
-        'operations',
-        'business-development',
-        'technical',
-        'marketing',
-        'finance',
-        'legal',
-        'hr',
-        'management'
-      ],
-      required: [true, 'Department is required']
-    },
-    phone: {
-      type: String,
-      trim: true,
-      match: [
-        /^\+?[1-9]\d{1,14}$/,
-        'Please provide a valid phone number'
-      ]
-    },
-    timezone: {
-      type: String,
-      default: 'UTC'
-    },
-    bio: {
-      type: String,
-      trim: true,
-      maxlength: [500, 'Bio cannot exceed 500 characters']
-    },
-    expertise: [{
-      type: String,
-      enum: [
-        'business-strategy',
-        'technical-development',
-        'marketing',
-        'fundraising',
-        'legal',
-        'operations',
-        'product-management',
-        'user-experience',
-        'data-analytics',
-        'mentoring'
-      ]
-    }],
-    preferences: {
-      notifications: {
-        email: {
-          type: Boolean,
-          default: true
-        },
-        browser: {
-          type: Boolean,
-          default: true
-        }
-      },
-      theme: {
-        type: String,
-        enum: ['light', 'dark'],
-        default: 'light'
-      },
-      workingHours: {
-        start: {
-          type: String,
-          default: '09:00'
-        },
-        end: {
-          type: String,
-          default: '17:00'
-        },
-        timezone: {
-          type: String,
-          default: 'UTC'
-        }
-      }
     }
   },
   
-  // Admin role and permissions
+  // Admin role
   role: {
     type: String,
     enum: ['admin', 'super_admin'],
     default: 'admin',
     required: true
-  },
-  
-  permissions: {
-    startups: {
-      view: {
-        type: Boolean,
-        default: true
-      },
-      edit: {
-        type: Boolean,
-        default: true
-      },
-      delete: {
-        type: Boolean,
-        default: false
-      }
-    },
-    questionnaires: {
-      view: {
-        type: Boolean,
-        default: true
-      },
-      review: {
-        type: Boolean,
-        default: true
-      },
-      approve: {
-        type: Boolean,
-        default: true
-      }
-    },
-    tasks: {
-      view: {
-        type: Boolean,
-        default: true
-      },
-      create: {
-        type: Boolean,
-        default: true
-      },
-      edit: {
-        type: Boolean,
-        default: true
-      },
-      delete: {
-        type: Boolean,
-        default: false
-      }
-    },
-    boards: {
-      view: {
-        type: Boolean,
-        default: true
-      },
-      create: {
-        type: Boolean,
-        default: true
-      },
-      edit: {
-        type: Boolean,
-        default: true
-      },
-      delete: {
-        type: Boolean,
-        default: false
-      }
-    },
-    analytics: {
-      view: {
-        type: Boolean,
-        default: true
-      },
-      export: {
-        type: Boolean,
-        default: false
-      }
-    },
-    system: {
-      userManagement: {
-        type: Boolean,
-        default: false
-      },
-      systemSettings: {
-        type: Boolean,
-        default: false
-      },
-      auditLogs: {
-        type: Boolean,
-        default: false
-      }
-    }
   },
   
   authentication: {
@@ -254,32 +81,6 @@ const adminSchema = new mongoose.Schema({
     default: 'active'
   },
   
-  // Admin workload and assignments
-  workload: {
-    assignedStartups: [{
-      startupId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Startup'
-      },
-      assignedAt: {
-        type: Date,
-        default: Date.now
-      },
-      status: {
-        type: String,
-        enum: ['active', 'completed', 'transferred'],
-        default: 'active'
-      }
-    }],
-    maxCapacity: {
-      type: Number,
-      default: 10
-    },
-    currentLoad: {
-      type: Number,
-      default: 0
-    }
-  },
   
   // Activity tracking
   activity: {
@@ -319,13 +120,6 @@ const adminSchema = new mongoose.Schema({
   inviteToken: String,
   inviteExpiresAt: Date,
   
-  // Emergency contact
-  emergencyContact: {
-    name: String,
-    relationship: String,
-    phone: String,
-    email: String
-  }
 }, {
   timestamps: true,
   toJSON: { 
@@ -368,18 +162,7 @@ adminSchema.virtual('isLocked').get(function() {
   return !!(this.authentication.lockedUntil && this.authentication.lockedUntil > Date.now());
 });
 
-// Virtual for workload percentage
-adminSchema.virtual('workloadPercentage').get(function() {
-  if (this.workload.maxCapacity === 0) return 0;
-  return Math.round((this.workload.currentLoad / this.workload.maxCapacity) * 100);
-});
-
-// Virtual to check if admin is available for new assignments
-adminSchema.virtual('isAvailable').get(function() {
-  return this.status === 'active' && this.workload.currentLoad < this.workload.maxCapacity;
-});
-
-// Pre-save middleware to hash password
+//// Pre-save middleware to hash password
 adminSchema.pre('save', async function(next) {
   // Only hash password if it's been modified (or is new)
   if (!this.isModified('password')) return next();
@@ -388,34 +171,6 @@ adminSchema.pre('save', async function(next) {
   const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
   this.password = await bcrypt.hash(this.password, saltRounds);
   
-  next();
-});
-
-// Pre-save middleware to set permissions based on role
-adminSchema.pre('save', function(next) {
-  if (this.isModified('role')) {
-    if (this.role === 'super_admin') {
-      // Super admin gets all permissions
-      this.permissions = {
-        startups: { view: true, edit: true, delete: true },
-        questionnaires: { view: true, review: true, approve: true },
-        tasks: { view: true, create: true, edit: true, delete: true },
-        boards: { view: true, create: true, edit: true, delete: true },
-        analytics: { view: true, export: true },
-        system: { userManagement: true, systemSettings: true, auditLogs: true }
-      };
-    }
-  }
-  next();
-});
-
-// Pre-save middleware to update workload
-adminSchema.pre('save', function(next) {
-  if (this.isModified('workload.assignedStartups')) {
-    this.workload.currentLoad = this.workload.assignedStartups.filter(
-      assignment => assignment.status === 'active'
-    ).length;
-  }
   next();
 });
 
@@ -486,48 +241,6 @@ adminSchema.methods.createPasswordResetToken = function() {
   return resetToken;
 };
 
-// Instance method to assign startup
-adminSchema.methods.assignStartup = function(startupId) {
-  // Check if already assigned
-  const existingAssignment = this.workload.assignedStartups.find(
-    assignment => assignment.startupId.toString() === startupId.toString()
-  );
-  
-  if (!existingAssignment) {
-    this.workload.assignedStartups.push({
-      startupId,
-      status: 'active'
-    });
-  } else if (existingAssignment.status !== 'active') {
-    existingAssignment.status = 'active';
-    existingAssignment.assignedAt = new Date();
-  }
-  
-  return this.save();
-};
-
-// Instance method to unassign startup
-adminSchema.methods.unassignStartup = function(startupId, reason = 'completed') {
-  const assignment = this.workload.assignedStartups.find(
-    assignment => assignment.startupId.toString() === startupId.toString()
-  );
-  
-  if (assignment) {
-    assignment.status = reason;
-  }
-  
-  return this.save();
-};
-
-// Instance method to check permission
-adminSchema.methods.hasPermission = function(resource, action) {
-  if (this.role === 'super_admin') return true;
-  
-  const resourcePermissions = this.permissions[resource];
-  if (!resourcePermissions) return false;
-  
-  return resourcePermissions[action] === true;
-};
 
 // Instance method to create invite token
 adminSchema.methods.createInviteToken = function() {
@@ -569,67 +282,5 @@ adminSchema.statics.findByInviteToken = function(token) {
   });
 };
 
-// Static method to find available admin for assignment
-adminSchema.statics.findAvailableAdmin = function(criteria = {}) {
-  const query = {
-    status: 'active',
-    $expr: { $lt: ['$workload.currentLoad', '$workload.maxCapacity'] }
-  };
-  
-  if (criteria.department) {
-    query['profile.department'] = criteria.department;
-  }
-  
-  if (criteria.expertise) {
-    query['profile.expertise'] = { $in: criteria.expertise };
-  }
-  
-  return this.findOne(query).sort({ 'workload.currentLoad': 1 });
-};
-
-// Static method to get admin statistics
-adminSchema.statics.getStatistics = async function(filters = {}) {
-  const matchStage = {};
-  
-  if (filters.department) {
-    matchStage['profile.department'] = filters.department;
-  }
-  
-  if (filters.role) {
-    matchStage.role = filters.role;
-  }
-  
-  const stats = await this.aggregate([
-    { $match: matchStage },
-    {
-      $group: {
-        _id: null,
-        total: { $sum: 1 },
-        active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
-        suspended: { $sum: { $cond: [{ $eq: ['$status', 'suspended'] }, 1, 0] } },
-        totalCapacity: { $sum: '$workload.maxCapacity' },
-        currentLoad: { $sum: '$workload.currentLoad' },
-        avgQuestionnairesReviewed: { $avg: '$activity.questionnairesReviewed' },
-        avgTasksCreated: { $avg: '$activity.tasksCreated' }
-      }
-    }
-  ]);
-  
-  const result = stats[0] || {
-    total: 0,
-    active: 0,
-    suspended: 0,
-    totalCapacity: 0,
-    currentLoad: 0,
-    avgQuestionnairesReviewed: 0,
-    avgTasksCreated: 0
-  };
-  
-  result.capacityUtilization = result.totalCapacity > 0 
-    ? Math.round((result.currentLoad / result.totalCapacity) * 100) 
-    : 0;
-  
-  return result;
-};
 
 module.exports = mongoose.model('Admin', adminSchema);

@@ -97,7 +97,6 @@ router.get('/', authenticateStartup, async (req, res, next) => {
           submittedAt: q.submittedAt,
           reviewedAt: q.review?.reviewedAt,
           reviewedBy: q.review?.reviewedBy,
-          adminNotes: q.review?.adminNotes,
           rejectionReason: q.review?.rejectionReason,
           trackingId: q._id.toString().slice(-8).toUpperCase()
         })),
@@ -291,7 +290,6 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
             status: q.status,
             submittedAt: q.submittedAt,
             reviewedAt: q.reviewedAt,
-            adminNotes: q.adminNotes,
             trackingId: q._id.toString().slice(-8).toUpperCase(),
             priorityScore: q.priorityScore,
             sprint: sprint
@@ -392,6 +390,7 @@ router.post('/admin/:id/create-sprint', authenticateAdmin, async (req, res, next
         status: 'available',
         estimatedDuration: sprintData.estimatedDuration,
         packageOptions: sprintData.packageOptions,
+        deliverables: sprintData.deliverables || [],
         createdBy: req.user._id,
         priority: sprintData.priority || 'medium'
       });
@@ -490,7 +489,6 @@ router.get('/admin/pending', authenticateAdmin, async (req, res, next) => {
           submittedAt: q.submittedAt,
           reviewedAt: q.reviewedAt,
           reviewedBy: q.reviewedBy,
-          adminNotes: q.adminNotes,
           trackingId: q._id.toString().slice(-8).toUpperCase(),
           priorityScore: q.priorityScore
         })),
@@ -614,7 +612,6 @@ router.post('/:id/review', authenticateAdmin, validate(questionnaireSchemas.revi
             id: req.user._id,
             name: req.user.profile.firstName + ' ' + req.user.profile.lastName
           },
-          adminNotes: questionnaire.adminNotes,
           priorityScore: questionnaire.priorityScore
         }
       }
@@ -629,6 +626,7 @@ router.post('/:id/review', authenticateAdmin, validate(questionnaireSchemas.revi
 // @route   GET /api/questionnaires/admin/analytics
 // @desc    Get questionnaire analytics (Admin)
 // @access  Private (Admin)
+/*
 router.get('/admin/analytics', authenticateAdmin, async (req, res, next) => {
   try {
     const { dateRange = '30d' } = req.query;
@@ -736,6 +734,7 @@ router.get('/admin/analytics', authenticateAdmin, async (req, res, next) => {
     next(error);
   }
 });
+*/
 
 // @route   POST /api/questionnaires/link
 // @desc    Link anonymous questionnaire to startup after registration
@@ -1014,7 +1013,6 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
           submittedAt: q.submittedAt,
           reviewedAt: q.reviewedAt,
           // reviewedBy removed
-          adminNotes: q.adminNotes,
           trackingId: q._id.toString().slice(-8).toUpperCase(),
           priorityScore: q.priorityScore
         })),
@@ -1218,7 +1216,6 @@ router.post('/:id/review', authenticateAdmin, validate(questionnaireSchemas.revi
             id: req.user._id,
             name: req.user.profile.firstName + ' ' + req.user.profile.lastName
           },
-          adminNotes: questionnaire.adminNotes,
           priorityScore: questionnaire.priorityScore
         }
       }

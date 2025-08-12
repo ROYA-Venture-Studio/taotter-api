@@ -20,8 +20,8 @@ const packageOptionSchema = new mongoose.Schema({
   currency: {
     type: String,
     required: true,
-    enum: ['USD', 'EUR', 'GBP'],
-    default: 'USD'
+    enum: ['USD', 'EUR', 'GBP','QAR'],
+    default: 'QAR'
   },
   engagementHours: {
     type: Number,
@@ -33,30 +33,6 @@ const packageOptionSchema = new mongoose.Schema({
     required: false,
     min: 0
   },
-  features: [{
-    type: String,
-    trim: true
-  }],
-  teamSize: {
-    type: Number,
-    required: false,
-    min: 0,
-    max: 20
-  },
-  communicationLevel: {
-    type: String,
-    enum: ['basic', 'standard', 'premium'],
-    default: 'standard'
-  },
-  isRecommended: {
-    type: Boolean,
-    default: false
-  },
-  deliverables: [{
-    name: String,
-    description: String,
-    estimatedHours: Number
-  }],
   hourlyRate: {
     type: Number,
     min: 0,
@@ -238,6 +214,9 @@ const sprintSchema = new mongoose.Schema({
   packageOptions: [packageOptionSchema],
   selectedPackage: packageOptionSchema,
 
+  // Top-level deliverables for the sprint
+  deliverables: [{ type: String, trim: true }],
+
   // Payment status for selected package
   selectedPackagePaymentStatus: {
     type: String,
@@ -299,28 +278,6 @@ const sprintSchema = new mongoose.Schema({
       default: Date.now
     }
   },
-  assignedTeam: {
-    teamLead: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Admin'
-    },
-    members: [teamMemberSchema],
-    department: {
-      type: String,
-      enum: ['development', 'design', 'marketing', 'consulting', 'mixed']
-    }
-  },
-  timeline: {
-    createdAt: {
-      type: Date,
-      default: Date.now
-    },
-    packageSelectedAt: Date,
-    documentsSubmittedAt: Date,
-    meetingScheduledAt: Date,
-    startedAt: Date,
-    completedAt: Date
-  },
   milestones: [milestoneSchema],
   startDate: Date,
   endDate: Date,
@@ -331,82 +288,6 @@ const sprintSchema = new mongoose.Schema({
     required: true
   },
   statusHistory: [statusHistorySchema],
-  budget: {
-    allocated: Number,
-    spent: {
-      type: Number,
-      default: 0
-    },
-    remaining: Number
-  },
-  priority: {
-    type: String,
-    enum: ['low', 'medium', 'high', 'urgent'],
-    default: 'medium'
-  },
-  tags: [{
-    name: {
-      type: String,
-      trim: true
-    },
-    color: {
-      type: String,
-      match: /^#[0-9A-F]{6}$/i
-    }
-  }],
-  notes: [{
-    content: {
-      type: String,
-      required: true,
-      maxlength: 2000
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-      refPath: 'notes.createdByType'
-    },
-    createdByType: {
-      type: String,
-      required: true,
-      enum: ['admin', 'startup']
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now
-    },
-    isInternal: {
-      type: Boolean,
-      default: false // If true, only visible to admins
-    }
-  }],
-  clientFeedback: [{
-    rating: {
-      type: Number,
-      min: 1,
-      max: 5
-    },
-    feedback: {
-      type: String,
-      maxlength: 2000
-    },
-    category: {
-      type: String,
-      enum: ['communication', 'quality', 'timeline', 'overall']
-    },
-    submittedAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  isArchived: {
-    type: Boolean,
-    default: false
-  },
-  archivedAt: Date,
-  archivedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin'
-  }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -424,29 +305,6 @@ sprintSchema.index({ startDate: 1, endDate: 1 });
 sprintSchema.index({ priority: 1 });
 sprintSchema.index({ createdAt: -1 });
 
-// Virtual for calculating days remaining
-sprintSchema.virtual('daysRemaining').get(function() {
-  if (!this.endDate) return null;
-  const today = new Date();
-  const diffTime = this.endDate - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-});
-
-// Virtual for calculating if sprint is overdue
-sprintSchema.virtual('isOverdue').get(function() {
-  if (!this.endDate || this.status === 'completed') return false;
-  return new Date() > this.endDate;
-});
-
-// Virtual for calculating actual duration
-sprintSchema.virtual('actualDuration').get(function() {
-  if (!this.startDate) return null;
-  const endDate = this.actualEndDate || this.endDate || new Date();
-  const diffTime = endDate - this.startDate;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-});
 
 // Pre-save middleware to update progress calculations
 sprintSchema.pre('save', function(next) {

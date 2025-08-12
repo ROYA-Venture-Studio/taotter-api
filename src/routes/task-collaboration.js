@@ -136,28 +136,9 @@ router.post('/:id/comments', authenticateAdmin, validate(require('joi').object({
     
     task.comments.push(comment);
     
-    // Add activity log
-    task.activityLog.push({
-      action: 'commented',
-      description: isInternal ? 'Added internal comment' : 'Added comment',
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        commentId: comment._id,
-        isInternal
-      }
-    });
+    // Activity log removed (field does not exist)
     
-    // Add mentioned users as watchers
-    for (const mentionedUserId of mentions) {
-      const isAlreadyWatching = task.watchers.some(w => w.userId.toString() === mentionedUserId);
-      if (!isAlreadyWatching) {
-        task.watchers.push({
-          userId: mentionedUserId,
-          addedAt: new Date()
-        });
-      }
-    }
+    // Watchers feature removed (field does not exist)
     
     await task.save();
     
@@ -223,16 +204,7 @@ router.put('/:id/comments/:commentId', authenticateAdmin, async (req, res, next)
     comment.editedAt = new Date();
     comment.editedBy = req.user._id;
     
-    // Add activity log
-    task.activityLog.push({
-      action: 'comment_edited',
-      description: 'Comment edited',
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        commentId: comment._id
-      }
-    });
+    // Activity log removed (field does not exist)
     
     await task.save();
     
@@ -277,16 +249,7 @@ router.delete('/:id/comments/:commentId', authenticateAdmin, async (req, res, ne
     
     task.comments.pull(req.params.commentId);
     
-    // Add activity log
-    task.activityLog.push({
-      action: 'comment_deleted',
-      description: 'Comment deleted',
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        commentId: req.params.commentId
-      }
-    });
+    // Activity log removed (field does not exist)
     
     await task.save();
     
@@ -310,59 +273,10 @@ router.post('/:id/time-logs', authenticateAdmin, validate(logTimeSchema), async 
     const task = await checkTaskAccess(req.params.id, req.user._id, 'write');
     const { hours, description, logDate } = req.body;
     
-    const timeLog = {
-      hours,
-      description,
-      logDate: logDate ? new Date(logDate) : new Date(),
-      loggedBy: req.user._id,
-      loggedAt: new Date()
-    };
-    
-    task.timeTracking.logs.push(timeLog);
-    
-    // Update total hours
-    task.timeTracking.totalHours = task.timeTracking.logs.reduce((total, log) => total + log.hours, 0);
-    
-    // Add activity log
-    task.activityLog.push({
-      action: 'time_logged',
-      description: `Logged ${hours} hours: ${description}`,
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        hours,
-        timeLogId: timeLog._id
-      }
-    });
-    
-    await task.save();
-    
-    // Populate for response
-    const populatedTask = await Task.findById(task._id)
-      .populate('timeTracking.logs.loggedBy', 'profile.firstName profile.lastName');
-    
-    const addedLog = populatedTask.timeTracking.logs[populatedTask.timeTracking.logs.length - 1];
-    
-    logger.logInfo(`Time logged for task ${task._id} by admin ${req.user._id}`, {
-      taskId: task._id,
-      hours,
-      totalHours: task.timeTracking.totalHours
-    });
-    
-    res.status(201).json({
-      success: true,
-      message: 'Time logged successfully',
-      data: {
-        timeLog: {
-          id: addedLog._id,
-          hours: addedLog.hours,
-          description: addedLog.description,
-          logDate: addedLog.logDate,
-          loggedBy: addedLog.loggedBy,
-          loggedAt: addedLog.loggedAt
-        },
-        totalHours: task.timeTracking.totalHours
-      }
+    // Time tracking removed (field does not exist)
+    res.status(501).json({
+      success: false,
+      message: 'Time tracking is not supported on this system.'
     });
     
   } catch (error) {
@@ -377,23 +291,10 @@ router.get('/:id/time-logs', authenticateAdmin, async (req, res, next) => {
   try {
     const task = await checkTaskAccess(req.params.id, req.user._id, 'read');
     
-    const populatedTask = await Task.findById(task._id)
-      .populate('timeTracking.logs.loggedBy', 'profile.firstName profile.lastName profile.avatar');
-    
-    res.json({
-      success: true,
-      data: {
-        timeLogs: populatedTask.timeTracking.logs.map(log => ({
-          id: log._id,
-          hours: log.hours,
-          description: log.description,
-          logDate: log.logDate,
-          loggedBy: log.loggedBy,
-          loggedAt: log.loggedAt
-        })),
-        totalHours: populatedTask.timeTracking.totalHours,
-        estimatedHours: populatedTask.estimatedHours
-      }
+    // Time tracking removed (field does not exist)
+    res.status(501).json({
+      success: false,
+      message: 'Time tracking is not supported on this system.'
     });
     
   } catch (error) {
@@ -408,46 +309,10 @@ router.delete('/:id/time-logs/:logId', authenticateAdmin, async (req, res, next)
   try {
     const task = await checkTaskAccess(req.params.id, req.user._id, 'write');
     
-    const timeLog = task.timeTracking.logs.id(req.params.logId);
-    if (!timeLog) {
-      return next(new AppError('Time log not found', 404, 'TIME_LOG_NOT_FOUND'));
-    }
-    
-    // Check if user can delete (only logger or admin)
-    const canDelete = timeLog.loggedBy.toString() === req.user._id.toString() ||
-                     req.user.role === 'super_admin' ||
-                     task.boardId.createdBy.toString() === req.user._id.toString();
-    
-    if (!canDelete) {
-      return next(new AppError('You can only delete your own time logs', 403, 'TIME_LOG_DELETE_DENIED'));
-    }
-    
-    const deletedHours = timeLog.hours;
-    task.timeTracking.logs.pull(req.params.logId);
-    
-    // Recalculate total hours
-    task.timeTracking.totalHours = task.timeTracking.logs.reduce((total, log) => total + log.hours, 0);
-    
-    // Add activity log
-    task.activityLog.push({
-      action: 'time_log_deleted',
-      description: `Deleted time log: ${deletedHours} hours`,
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        deletedHours,
-        timeLogId: req.params.logId
-      }
-    });
-    
-    await task.save();
-    
-    res.json({
-      success: true,
-      message: 'Time log deleted successfully',
-      data: {
-        totalHours: task.timeTracking.totalHours
-      }
+    // Time tracking removed (field does not exist)
+    res.status(501).json({
+      success: false,
+      message: 'Time tracking is not supported on this system.'
     });
     
   } catch (error) {
@@ -485,17 +350,7 @@ router.post('/:id/subtasks', authenticateAdmin, validate(addSubtaskSchema), asyn
     
     task.subtasks.push(subtask);
     
-    // Add activity log
-    task.activityLog.push({
-      action: 'subtask_added',
-      description: `Added subtask: ${title}`,
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        subtaskId: subtask._id,
-        subtaskTitle: title
-      }
-    });
+    // Activity log removed (field does not exist)
     
     await task.save();
     
@@ -571,18 +426,7 @@ router.put('/:id/subtasks/:subtaskId', authenticateAdmin, async (req, res, next)
     if (title !== undefined) changes.push('title');
     if (assigneeId !== undefined) changes.push('assignee');
     
-    if (changes.length > 0) {
-      task.activityLog.push({
-        action: 'subtask_updated',
-        description: `Updated subtask: ${subtask.title} (${changes.join(', ')})`,
-        userId: req.user._id,
-        timestamp: new Date(),
-        metadata: {
-          subtaskId: subtask._id,
-          changes
-        }
-      });
-    }
+    // Activity log removed (field does not exist)
     
     await task.save();
     
@@ -622,135 +466,13 @@ router.delete('/:id/subtasks/:subtaskId', authenticateAdmin, async (req, res, ne
     const subtaskTitle = subtask.title;
     task.subtasks.pull(req.params.subtaskId);
     
-    // Add activity log
-    task.activityLog.push({
-      action: 'subtask_deleted',
-      description: `Deleted subtask: ${subtaskTitle}`,
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        subtaskId: req.params.subtaskId,
-        subtaskTitle
-      }
-    });
+    // Activity log removed (field does not exist)
     
     await task.save();
     
     res.json({
       success: true,
       message: 'Subtask deleted successfully'
-    });
-    
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ==================== WATCHERS ====================
-
-// @route   POST /api/tasks/:id/watchers
-// @desc    Add watcher to task
-// @access  Private (Admin)
-router.post('/:id/watchers', authenticateAdmin, async (req, res, next) => {
-  try {
-    const task = await checkTaskAccess(req.params.id, req.user._id, 'read');
-    const { userId } = req.body;
-    
-    if (!userId) {
-      return next(new AppError('User ID is required', 400, 'USER_ID_REQUIRED'));
-    }
-    
-    // Check if user is already watching
-    const isAlreadyWatching = task.watchers.some(w => w.userId.toString() === userId);
-    if (isAlreadyWatching) {
-      return next(new AppError('User is already watching this task', 400, 'ALREADY_WATCHING'));
-    }
-    
-    // Validate user exists
-    const Admin = require('../models/Admin');
-    const user = await Admin.findById(userId);
-    if (!user) {
-      return next(new AppError('User not found', 404, 'USER_NOT_FOUND'));
-    }
-    
-    task.watchers.push({
-      userId,
-      addedAt: new Date(),
-      addedBy: req.user._id
-    });
-    
-    // Add activity log
-    task.activityLog.push({
-      action: 'watcher_added',
-      description: `Added ${user.profile.firstName} ${user.profile.lastName} as watcher`,
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        watcherUserId: userId,
-        watcherName: `${user.profile.firstName} ${user.profile.lastName}`
-      }
-    });
-    
-    await task.save();
-    
-    res.status(201).json({
-      success: true,
-      message: 'Watcher added successfully',
-      data: {
-        watcher: {
-          userId,
-          name: `${user.profile.firstName} ${user.profile.lastName}`,
-          addedAt: new Date()
-        }
-      }
-    });
-    
-  } catch (error) {
-    next(error);
-  }
-});
-
-// @route   DELETE /api/tasks/:id/watchers/:userId
-// @desc    Remove watcher from task
-// @access  Private (Admin)
-router.delete('/:id/watchers/:userId', authenticateAdmin, async (req, res, next) => {
-  try {
-    const task = await checkTaskAccess(req.params.id, req.user._id, 'read');
-    const { userId } = req.params;
-    
-    const watcher = task.watchers.find(w => w.userId.toString() === userId);
-    if (!watcher) {
-      return next(new AppError('User is not watching this task', 404, 'NOT_WATCHING'));
-    }
-    
-    // Check if user can remove watcher (self, task creator, or admin)
-    const canRemove = userId === req.user._id.toString() ||
-                     task.createdBy.toString() === req.user._id.toString() ||
-                     task.boardId.createdBy.toString() === req.user._id.toString() ||
-                     req.user.role === 'super_admin';
-    
-    if (!canRemove) {
-      return next(new AppError('You do not have permission to remove this watcher', 403, 'WATCHER_REMOVE_DENIED'));
-    }
-    
-    task.watchers = task.watchers.filter(w => w.userId.toString() !== userId);
-    
-    // Add activity log
-    task.activityLog.push({
-      action: 'watcher_removed',
-      description: 'Watcher removed',
-      userId: req.user._id,
-      timestamp: new Date(),
-      metadata: {
-        watcherUserId: userId
-      }
-    });
-    
-    await task.save();
-    
-    res.json({
-      success: true,
-      message: 'Watcher removed successfully'
     });
     
   } catch (error) {

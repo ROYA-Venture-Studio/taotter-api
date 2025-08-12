@@ -9,7 +9,8 @@ const { validate } = require('../utils/validation');
 const logger = require('../utils/logger');
 const { sendEmail } = require('../utils/communications');
 const azureStorage = require('../utils/azureStorage');
-
+    const Task = require('../models/Task');
+const Board = require('../models/Board')
 // Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -65,8 +66,7 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
       .sort({ updatedAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .populate('createdBy', 'profile.firstName profile.lastName')
-      .populate('assignedTeam.members.userId', 'profile.firstName profile.lastName profile.role profile.department');
+      .populate('createdBy', 'profile.firstName profile.lastName');
 
     const total = await Sprint.countDocuments(query);
 
@@ -81,8 +81,6 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
           status: sprint.status,
           progress: sprint.progress,
           selectedPackage: sprint.selectedPackage,
-          assignedTeam: sprint.assignedTeam,
-          timeline: sprint.timeline,
           milestones: sprint.milestones,
           createdAt: sprint.createdAt,
           startDate: sprint.startDate,
@@ -118,23 +116,21 @@ router.get('/', authenticateStartup, async (req, res, next) => {
       startupId: req.user._id,
       status: { $in: ['approved', 'sprint_created'] }
     });
-    
+    console.log(questionnaire)
     if (!questionnaire) {
       return next(new AppError('No approved or sprint-created questionnaire found. Please submit and get approval for a questionnaire first.', 403, 'NO_APPROVED_QUESTIONNAIRE'));
     }
     
     const query = {
-      questionnaireId: questionnaire._id,
-      status: status === 'available' ? { $in: ['available', 'draft'] } : status
-    };
-    
+      questionnaireId: questionnaire._id
+        };
+    console.log(query)
     const sprints = await Sprint.find(query)
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .populate('createdBy', 'profile.firstName profile.lastName')
-      .populate('assignedTeam.members.userId', 'profile.firstName profile.lastName profile.role');
-    
+      .populate('createdBy', 'profile.firstName profile.lastName');
+    console.log(sprints)
     const total = await Sprint.countDocuments(query);
     
     res.json({
@@ -146,6 +142,9 @@ router.get('/', authenticateStartup, async (req, res, next) => {
           description: sprint.description,
           type: sprint.type,
           status: sprint.status,
+          selectedPackagePaymentStatus: sprint.selectedPackagePaymentStatus || "unpaid",
+          selectedPackagePaymentVerifiedAt: sprint.selectedPackagePaymentVerifiedAt || null,
+          deliverables: sprint.deliverables,
           estimatedDuration: sprint.estimatedDuration,
           packageOptions: sprint.packageOptions.map(pkg => ({
             id: pkg._id,
@@ -153,18 +152,15 @@ router.get('/', authenticateStartup, async (req, res, next) => {
             description: pkg.description,
             price: pkg.price,
             currency: pkg.currency,
-            engagementHours: pkg.engagementHours,
             duration: pkg.duration,
             features: pkg.features,
             teamSize: pkg.teamSize,
-            communicationLevel: pkg.communicationLevel,
             isRecommended: pkg.isRecommended,
             paymentLink: pkg.paymentLink || ""
           })),
           createdBy: sprint.createdBy,
           createdAt: sprint.createdAt,
           updatedAt: sprint.updatedAt,
-          timeline: sprint.timeline,
           selectedPackage: sprint.selectedPackage
         })),
         pagination: {
@@ -208,8 +204,7 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
       .sort({ updatedAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .populate('createdBy', 'profile.firstName profile.lastName')
-      .populate('assignedTeam.members.userId', 'profile.firstName profile.lastName profile.role profile.department');
+      .populate('createdBy', 'profile.firstName profile.lastName');
     
     const total = await Sprint.countDocuments(query);
     
@@ -224,8 +219,7 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
           status: sprint.status,
           progress: sprint.progress,
           selectedPackage: sprint.selectedPackage,
-          assignedTeam: sprint.assignedTeam,
-          timeline: sprint.timeline,
+          deliverables: sprint.deliverables,
           milestones: sprint.milestones,
           createdAt: sprint.createdAt,
           startDate: sprint.startDate,
@@ -257,8 +251,7 @@ router.get('/:id', authenticateStartup, async (req, res, next) => {
   try {
     const sprint = await Sprint.findById(req.params.id)
       .populate('questionnaireId')
-      .populate('createdBy', 'profile.firstName profile.lastName')
-      .populate('assignedTeam.members.userId', 'profile.firstName profile.lastName profile.role profile.department');
+      .populate('createdBy', 'profile.firstName profile.lastName');
     
     if (!sprint) {
       return next(new AppError('Sprint not found', 404, 'SPRINT_NOT_FOUND'));
@@ -285,11 +278,10 @@ router.get('/:id', authenticateStartup, async (req, res, next) => {
           status: sprint.status,
           estimatedDuration: sprint.estimatedDuration,
           packageOptions: sprint.packageOptions,
+          deliverables: sprint.deliverables,
           selectedPackage: sprint.selectedPackage,
           requiredDocuments: sprint.requiredDocuments,
           progress: sprint.progress,
-          assignedTeam: sprint.assignedTeam,
-          timeline: sprint.timeline,
           milestones: sprint.milestones,
           createdBy: sprint.createdBy,
           createdAt: sprint.createdAt,
@@ -340,7 +332,6 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
     // Update sprint with selected package
     sprint.selectedPackage = selectedPackage;
     sprint.status = 'package_selected';
-    sprint.timeline.packageSelectedAt = new Date();
     
     // Add to status history
     sprint.statusHistory.push({
@@ -433,7 +424,6 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
           req.params.id,
           'brandGuidelines'
         );
-        console.log(uploadResult);
         if (uploadResult.success) {
           const documentData = {
             fileName: uploadResult.fileName,
@@ -444,15 +434,10 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
             uploadedAt: new Date()
           };
           
-          // Store uploaded file in sprint.sprintDocuments
-          if (!sprint.sprintDocuments) {
-            sprint.sprintDocuments = { uploadedFiles: [], contactLists: '', appDemo: '', submittedAt: null };
-          }
-          if (!Array.isArray(sprint.sprintDocuments.uploadedFiles)) {
-            sprint.sprintDocuments.uploadedFiles = [];
-          }
+          // Store uploaded file in sprint.sprintDocuments.uploadedFiles
+          if (!sprint.sprintDocuments) sprint.sprintDocuments = {};
+          if (!sprint.sprintDocuments.uploadedFiles) sprint.sprintDocuments.uploadedFiles = [];
           sprint.sprintDocuments.uploadedFiles.push(documentData);
-
           uploadedDocuments.push(documentData);
         }
       } catch (uploadError) {
@@ -461,14 +446,7 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
       }
     }
 
-    // Store text fields in sprint.sprintDocuments
-    if (!sprint.sprintDocuments) {
-      sprint.sprintDocuments = { uploadedFiles: [], contactLists: '', appDemo: '', submittedAt: null };
-    }
-    sprint.sprintDocuments.contactLists = contactLists || '';
-    sprint.sprintDocuments.appDemo = appDemo || '';
-    sprint.sprintDocuments.submittedAt = new Date();
-
+    // sprintDocuments removed from Sprint model. Text fields not stored.
     const documentSubmission = {
       sprintId: req.params.id,
       contactLists: contactLists || '',
@@ -479,7 +457,10 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
     
     // Mark documents as submitted
     sprint.documentsSubmitted = true;
-    sprint.timeline.documentsSubmittedAt = new Date();
+    if (!sprint.sprintDocuments) sprint.sprintDocuments = {};
+    sprint.sprintDocuments.contactLists = contactLists || '';
+    sprint.sprintDocuments.appDemo = appDemo || '';
+    sprint.sprintDocuments.submittedAt = new Date();
     sprint.status = 'documents_submitted';
     
     // Add to status history
@@ -508,7 +489,7 @@ router.post('/:id/upload-documents', authenticateStartup, upload.single('brandGu
           id: sprint._id,
           status: sprint.status,
           documentsSubmitted: sprint.documentsSubmitted,
-          timeline: sprint.timeline
+          submittedAt: sprint.sprintDocuments?.submittedAt || null
         },
         uploadedDocuments,
         submission: documentSubmission
@@ -553,7 +534,6 @@ router.post('/:id/schedule-meeting', authenticateStartup, async (req, res, next)
       scheduledBy: req.user._id
     };
     
-    sprint.timeline.meetingScheduledAt = new Date();
     sprint.status = 'meeting_scheduled';
     
     // Add to status history
@@ -691,9 +671,9 @@ router.post('/admin/create', authenticateAdmin, validate(require('joi').object({
       type,
       estimatedDuration,
       packageOptions,
-      requiredDocuments = []
+      requiredDocuments = [],
+      deliverables = []
     } = req.body;
-    
     // Validate questionnaire exists and is approved
     const questionnaire = await Questionnaire.findById(questionnaireId)
       .populate('startupId', 'email profile.founderFirstName profile.founderLastName profile.companyName');
@@ -738,6 +718,7 @@ router.post('/admin/create', authenticateAdmin, validate(require('joi').object({
         paymentLink: pkg.paymentLink || ""
       })),
       requiredDocuments,
+      deliverables,
       createdBy: req.user._id,
       timeline: {
         createdAt: new Date()
@@ -825,35 +806,56 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
       status,
       type,
       sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      search
     } = req.query;
-    
+
     const query = {};
-    if (status) query.status = status;
+    if (status && status !== "all") query.status = status;
     if (type) query.type = type;
-    
+
+    // Search by sprint name or startup name
+    if (search && search.trim() !== "") {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
+    }
+
     const sort = {};
     sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
-    
+
+    // Populate startup name for search filter
     const sprints = await Sprint.find(query)
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .populate('questionnaireId', 'basicInfo.startupName basicInfo.taskType')
-      .populate('createdBy', 'profile.firstName profile.lastName')
-      .populate('assignedTeam.members.userId', 'profile.firstName profile.lastName');
-    
+      .populate('createdBy', 'profile.firstName profile.lastName');
+
+    // If searching by startup name, filter in-memory (MongoDB can't search populated fields)
+    let filteredSprints = sprints;
+    if (search && search.trim() !== "") {
+      filteredSprints = sprints.filter(sprint =>
+        (sprint.questionnaireId?.basicInfo?.startupName || "")
+          .toLowerCase()
+          .includes(search.toLowerCase()) ||
+        (sprint.name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (sprint.description || "").toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
     const total = await Sprint.countDocuments(query);
-    
+
     // Get status summary
     const statusSummary = await Sprint.aggregate([
       { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
-    
+
     res.json({
       success: true,
       data: {
-        sprints: sprints.map(sprint => ({
+        sprints: filteredSprints.map(sprint => ({
           id: sprint._id,
           name: sprint.name,
           description: sprint.description,
@@ -862,12 +864,10 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
           questionnaire: sprint.questionnaireId,
           selectedPackage: sprint.selectedPackage,
           progress: sprint.progress,
-          assignedTeam: sprint.assignedTeam,
           createdBy: sprint.createdBy,
           createdAt: sprint.createdAt,
           startDate: sprint.startDate,
-          endDate: sprint.endDate,
-          timeline: sprint.timeline
+          endDate: sprint.endDate
         })),
         pagination: {
           currentPage: parseInt(page),
@@ -884,7 +884,7 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
         }
       }
     });
-    
+
   } catch (error) {
     next(error);
   }
@@ -913,10 +913,8 @@ router.put('/admin/:id/status', authenticateAdmin, validate(require('joi').objec
     // Update timeline based on status
     if (status === 'in_progress' && !sprint.startDate) {
       sprint.startDate = new Date();
-      sprint.timeline.startedAt = new Date();
     } else if (status === 'completed' && !sprint.endDate) {
       sprint.endDate = new Date();
-      sprint.timeline.completedAt = new Date();
       sprint.progress.percentage = 100;
     }
     
@@ -953,14 +951,13 @@ router.put('/admin/:id/status', authenticateAdmin, validate(require('joi').objec
       success: true,
       message: 'Sprint status updated successfully',
       data: {
-        sprint: {
-          id: sprint._id,
-          status: sprint.status,
-          startDate: sprint.startDate,
-          endDate: sprint.endDate,
-          timeline: sprint.timeline,
-          progress: sprint.progress
-        }
+          sprint: {
+            id: sprint._id,
+            status: sprint.status,
+            startDate: sprint.startDate,
+            endDate: sprint.endDate,
+            progress: sprint.progress
+          }
       }
     });
     
@@ -991,13 +988,15 @@ router.put('/startup/:id/finish', authenticateStartup, async (req, res, next) =>
     if (sprint.status === 'completed') {
       return res.json({ success: true, message: 'Sprint already completed' });
     }
-
+console.log(sprint.id)
     // Check all tasks for this sprint are completed
-    const Task = require('../models/Task');
-    const tasks = await Task.find({ sprintId: sprint._id, isArchived: { $ne: true } });
+const boards = await Board.find({ sprintId: sprint.id });
+const boardIds = boards.map(b => b._id);
+const tasks = await Task.find({ boardId: { $in: boardIds } });
+
     const allTasksDone = tasks.length > 0 && tasks.every(task => task.status === 'done');
     const isSprintComplete = sprint.progress && sprint.progress.percentage === 100;
-
+    // console.log(isSprintComplete)
     if (!allTasksDone || !isSprintComplete) {
       return res.status(400).json({
         success: false,
@@ -1014,7 +1013,6 @@ router.put('/startup/:id/finish', authenticateStartup, async (req, res, next) =>
 
     sprint.status = 'completed';
     sprint.endDate = new Date();
-    sprint.timeline.completedAt = new Date();
     sprint.progress.percentage = 100;
     sprint.statusHistory.push({
       status: 'completed',
@@ -1032,7 +1030,6 @@ router.put('/startup/:id/finish', authenticateStartup, async (req, res, next) =>
           id: sprint._id,
           status: sprint.status,
           endDate: sprint.endDate,
-          timeline: sprint.timeline,
           progress: sprint.progress
         }
       }

@@ -105,7 +105,6 @@ const authenticate = async (req, res, next) => {
       }
       
       // Update last active time
-      user.engagement.lastActiveAt = new Date();
       await user.save();
       
     } else if (decoded.userType === 'admin') {

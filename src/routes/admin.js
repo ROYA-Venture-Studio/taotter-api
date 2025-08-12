@@ -195,7 +195,7 @@ router.get('/startups/:id/sprints', authenticateAdmin, async (req, res, next) =>
       .skip((page - 1) * limit)
       .populate('questionnaireId', 'basicInfo')
       .populate('createdBy', 'profile.firstName profile.lastName')
-      .select('name type status selectedPackage createdAt');
+      .select('name type status selectedPackage selectedPackagePaymentStatus createdAt');
 
     const total = await Sprint.countDocuments({
       questionnaireId: { $in: questionnaireIds }
@@ -208,43 +208,42 @@ router.get('/startups/:id/sprints', authenticateAdmin, async (req, res, next) =>
         const board = await Board.findOne({ sprintId: sprint._id }).select('_id columns');
         
         let progress = 0;
+        console.log(board)
         if (board && board.columns) {
           // Get all tasks for this board
           const totalTasks = await Task.countDocuments({ 
             boardId: board._id, 
-            isArchived: false 
           });
-          
+          console.log(totalTasks)
           if (totalTasks > 0) {
             // Find completed columns (assuming columns with names like "Done", "Completed", "Complete")
             const completedColumns = board.columns.filter(col => 
               /^(done|completed?|finished?)$/i.test(col.name.trim()) || 
               col.isCompleted === true
             );
-            
+            console.log(completedColumns)
             if (completedColumns.length > 0) {
               const completedColumnIds = completedColumns.map(col => col._id);
-              
+                          // console.log(completedColumnsIds)
+
               // Count tasks in completed columns
               const completedTasks = await Task.countDocuments({
                 boardId: board._id,
-                columnId: { $in: completedColumnIds },
-                isArchived: false
-              });
-              
+                columnId: { $in: completedColumnIds }
+                            });
+              console.log(completedTasks)
               progress = Math.round((completedTasks / totalTasks) * 100);
             }
           }
         }
-
         return {
           _id: sprint._id,
           name: sprint.name,
           type: sprint.type,
           status: sprint.status,
           progress: progress,
-          hasSelectedPackage: !!sprint.selectedPackage,
-          packageName: sprint.selectedPackage?.name || null,
+          selectedPackage: sprint.selectedPackage || null,
+          selectedPackagePaymentStatus: sprint.selectedPackagePaymentStatus || null,
           createdAt: sprint.createdAt,
           createdBy: sprint.createdBy,
           questionnaire: sprint.questionnaireId?.basicInfo || null,
