@@ -54,8 +54,11 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
     const questionnaireIds = questionnaires.map(q => q._id);
 
     const query = {
-      questionnaireId: { $in: questionnaireIds },
-      selectedPackage: { $exists: true }
+      questionnaireId: questionnaireIds,
+      $or: [
+        { selectedPackage: { $exists: true } },
+        { createdBy: req.user._id }
+      ]
     };
 
     if (status) {
@@ -75,6 +78,7 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
       data: {
         sprints: sprints.map(sprint => ({
           id: sprint._id,
+          questionnaireId: sprint.questionnaireId ? sprint.questionnaireId.toString() : undefined,
           name: sprint.name,
           description: sprint.description,
           type: sprint.type,
@@ -106,15 +110,134 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
 
 // ... (rest of the code remains unchanged) ...
 
+/**
+ * @route   POST /api/sprints/startup/create-temp
+ * @desc    Create a temporary sprint for a startup after questionnaire submission
+ * @access  Private (Startup)
+ */
+router.post('/startup/create-temp', authenticateStartup, async (req, res, next) => {
+  try {
+    const { questionnaireId, name, description, type, estimatedDuration } = req.body;
+    // Validate questionnaire exists and belongs to startup
+    const questionnaire = await Questionnaire.findById(questionnaireId);
+    console.log('questionnaire:', questionnaire);
+    console.log('questionnaire.startupId:', questionnaire ? questionnaire.startupId : null);
+    console.log('req.user._id:', req.user ? req.user._id : null);
+    if (!questionnaire || !questionnaire.startupId || questionnaire.startupId.toString() !== req.user._id.toString()) {
+      return next(new AppError('Invalid questionnaire for this startup', 403, 'INVALID_QUESTIONNAIRE'));
+    }
+    // Check if a sprint already exists for this questionnaire
+    const existingSprint = await Sprint.findOne({ questionnaireId });
+    if (existingSprint) {
+      return res.status(200).json({
+        success: true,
+        message: 'Sprint already exists for this questionnaire',
+        data: { sprint: existingSprint }
+      });
+    }
+    // Map type to allowed enum values
+    const allowedTypes = ['mvp', 'validation', 'branding', 'marketing', 'fundraising', 'custom'];
+    const sprintType = allowedTypes.includes(type) ? type : 'custom';
+    // Create temp sprint
+    const sprint = new Sprint({
+      questionnaireId,
+      name,
+      description,
+      type: sprintType,
+      status: 'draft',
+      estimatedDuration,
+      createdBy: req.user._id,
+      progress: { percentage: 0, currentPhase: 'planning' },
+      statusHistory: [{
+        status: 'draft',
+        changedAt: new Date(),
+        changedBy: req.user._id,
+        userType: 'startup',
+        note: 'Temporary sprint created after questionnaire submission'
+      }]
+    });
+    await sprint.save();
+    res.status(201).json({
+      success: true,
+      message: 'Temporary sprint created',
+      data: { sprint }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /api/sprints/questionnaire/:questionnaireId/proposals
+ * @desc    Get admin proposals for a questionnaire (available sprints)
+ * @access  Private (Startup)
+ */
+const mongoose = require('mongoose');
+router.get('/questionnaire/:questionnaireId/proposals', authenticateStartup, async (req, res, next) => {
+  try {
+    const questionnaireIdRaw = String(req.params.questionnaireId || '').trim();
+    if (!mongoose.Types.ObjectId.isValid(questionnaireIdRaw)) {
+      return res.status(400).json({ success: false, message: 'Invalid questionnaireId' });
+    }
+    const questionnaireId = questionnaireIdRaw;
+    // Optionally verify questionnaire belongs to req.user._id
+    const questionnaire = await Questionnaire.findById(questionnaireId);
+    if (!questionnaire || questionnaire.startupId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+    // Find admin-created sprints for this questionnaire with status 'available'
+    const proposals = await Sprint.find({ questionnaireId, status: 'available' }).select('_id name packageOptions');
+    res.json({ success: true, data: { proposals } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/by-questionnaire/:questionnaireId', authenticateStartup, async (req, res, next) => {
+  try {
+    const { questionnaireId } = req.params;
+    const sprints = await Sprint.find({ questionnaireId });
+    res.json({ success: true, data: { sprints } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   DELETE /api/sprints/:id
+ * @desc    Delete a sprint (Startup can only delete their own draft sprint)
+ * @access  Private (Startup)
+ */
+router.delete('/:id', authenticateStartup, async (req, res, next) => {
+  try {
+    const sprint = await Sprint.findById(req.params.id);
+    if (!sprint) {
+      return res.status(404).json({ success: false, message: 'Sprint not found' });
+    }
+    // Only allow deleting draft sprints created by the startup
+    if (
+      sprint.status !== 'draft' ||
+      !sprint.createdBy ||
+      sprint.createdBy.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own draft sprints.' });
+    }
+    await sprint.deleteOne();
+    res.json({ success: true, message: 'Sprint deleted.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 router.get('/', authenticateStartup, async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status = 'available' } = req.query;
     
-    // Check if startup has approved or sprint_created questionnaire
+    // Check if startup has approved or proposal_created questionnaire
     const questionnaire = await Questionnaire.findOne({
       startupId: req.user._id,
-      status: { $in: ['approved', 'sprint_created'] }
+      status: { $in: ['approved', 'proposal_created'] }
     });
     console.log(questionnaire)
     if (!questionnaire) {
@@ -156,7 +279,11 @@ router.get('/', authenticateStartup, async (req, res, next) => {
             features: pkg.features,
             teamSize: pkg.teamSize,
             isRecommended: pkg.isRecommended,
-            paymentLink: pkg.paymentLink || ""
+            paymentLink: pkg.paymentLink || "",
+            pricingModel: pkg.pricingModel || (
+              pkg.hourlyRate && pkg.QTY ? "hourly" :
+              pkg.amount ? "fixed" : undefined
+            )
           })),
           createdBy: sprint.createdBy,
           createdAt: sprint.createdAt,
@@ -213,6 +340,7 @@ router.get('/my-sprints', authenticateStartup, async (req, res, next) => {
       data: {
         sprints: sprints.map(sprint => ({
           id: sprint._id,
+          questionnaireId: sprint.questionnaireId ? sprint.questionnaireId.toString() : undefined,
           name: sprint.name,
           description: sprint.description,
           type: sprint.type,
@@ -277,9 +405,23 @@ router.get('/:id', authenticateStartup, async (req, res, next) => {
           type: sprint.type,
           status: sprint.status,
           estimatedDuration: sprint.estimatedDuration,
-          packageOptions: sprint.packageOptions,
+          packageOptions: sprint.packageOptions.map(pkg => ({
+            ...pkg.toObject(),
+            pricingModel: pkg.pricingModel || (
+              pkg.hourlyRate && pkg.QTY ? "hourly" :
+              pkg.amount ? "fixed" : undefined
+            )
+          })),
           deliverables: sprint.deliverables,
-          selectedPackage: sprint.selectedPackage,
+          selectedPackage: sprint.selectedPackage
+            ? {
+                ...sprint.selectedPackage.toObject(),
+                pricingModel: sprint.selectedPackage.pricingModel || (
+                  sprint.selectedPackage.hourlyRate && sprint.selectedPackage.QTY ? "hourly" :
+                  sprint.selectedPackage.amount ? "fixed" : undefined
+                )
+              }
+            : null,
           requiredDocuments: sprint.requiredDocuments,
           progress: sprint.progress,
           milestones: sprint.milestones,
@@ -711,9 +853,8 @@ router.post('/admin/create', authenticateAdmin, validate(require('joi').object({
       if (!pkg.name || !pkg.description || !pkg.price || !pkg.currency) {
         return next(new AppError('Each package must have name, description, price, and currency', 400, 'INVALID_PACKAGE_OPTIONS'));
       }
-      // Validate paymentLink if present
-      if (pkg.paymentLink && typeof pkg.paymentLink !== 'string') {
-        return next(new AppError('Payment link must be a string', 400, 'INVALID_PAYMENT_LINK'));
+      if (!pkg.paymentLink || typeof pkg.paymentLink !== 'string' || pkg.paymentLink.trim() === "") {
+        return next(new AppError('Each package must have a valid payment link', 400, 'MISSING_PAYMENT_LINK'));
       }
     }
     
@@ -749,7 +890,7 @@ router.post('/admin/create', authenticateAdmin, validate(require('joi').object({
     await sprint.save();
     
     // Update questionnaire status
-    questionnaire.status = 'sprint_created';
+    questionnaire.status = 'proposal_created';
     await questionnaire.save();
     
     // Update startup onboarding
@@ -887,7 +1028,29 @@ router.get('/admin/all', authenticateAdmin, async (req, res, next) => {
           createdBy: sprint.createdBy,
           createdAt: sprint.createdAt,
           startDate: sprint.startDate,
-          endDate: sprint.endDate
+          endDate: sprint.endDate,
+          deliverables: sprint.deliverables,
+          estimatedDuration: sprint.estimatedDuration,
+          packageOptions: sprint.packageOptions ? sprint.packageOptions.map(pkg => ({
+            id: pkg._id,
+            name: pkg.name,
+            description: pkg.description,
+            price: pkg.price,
+            currency: pkg.currency,
+            duration: pkg.duration,
+            features: pkg.features,
+            teamSize: pkg.teamSize,
+            isRecommended: pkg.isRecommended,
+            paymentLink: pkg.paymentLink || "",
+            pricingModel: pkg.pricingModel || (
+              pkg.hourlyRate && pkg.QTY ? "hourly" :
+              pkg.amount ? "fixed" : undefined
+            ),
+            hourlyRate: pkg.hourlyRate,
+            QTY: pkg.QTY,
+            amount: pkg.amount,
+            discount: pkg.discount
+          })) : []
         })),
         pagination: {
           currentPage: parseInt(page),

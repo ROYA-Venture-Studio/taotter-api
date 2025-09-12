@@ -158,7 +158,7 @@ const questionnaireSchema = new mongoose.Schema({
   // Status and workflow
   status: {
     type: String,
-    enum: ['draft', 'submitted', 'meeting_scheduled', 'sprint_created'],
+    enum: ['draft', 'submitted', 'meeting_scheduled', 'sprint_created', 'proposal_created'],
     default: 'draft',
     index: true
   },

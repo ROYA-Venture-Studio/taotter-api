@@ -46,7 +46,7 @@ const packageOptionSchema = new mongoose.Schema({
   paymentLink: {
     type: String,
     trim: true,
-    required: false
+    required: true
   },
   QTY: {
     type: Number,
@@ -63,6 +63,29 @@ const packageOptionSchema = new mongoose.Schema({
     required: false
   }
 }, { _id: true });
+
+// Mutually exclusive pricing model validation (append-only)
+packageOptionSchema.pre('validate', function(next) {
+  const hasHourly = typeof this.hourlyRate === 'number' && typeof this.QTY === 'number' && this.hourlyRate > 0 && this.QTY > 0;
+  const hasFixed = typeof this.amount === 'number' && this.amount > 0;
+
+  if (hasHourly && hasFixed) {
+    this.invalidate('pricing', 'Cannot use both hourly and fixed pricing models');
+  }
+  if (!hasHourly && !hasFixed) {
+    this.invalidate('pricing', 'Must specify either hourly pricing (hourlyRate + QTY) or fixed pricing (amount)');
+  }
+  // Set price field based on model
+  if (hasHourly) {
+    this.price = this.hourlyRate * this.QTY;
+    this.amount = undefined;
+  } else if (hasFixed) {
+    this.price = this.amount;
+    this.hourlyRate = undefined;
+    this.QTY = undefined;
+  }
+  next();
+});
 
 const milestoneSchema = new mongoose.Schema({
   name: {

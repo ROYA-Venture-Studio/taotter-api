@@ -22,7 +22,7 @@ router.post('/',
     // Generate a temporaryId for anonymous submission
     const temporaryId = uuidv4();
 
-    // Create questionnaire with temporaryId (no startupId yet)
+    // Create questionnaire with temporaryId (and startupId if provided)
     const questionnaire = new Questionnaire({
       temporaryId,
       basicInfo,
@@ -33,7 +33,8 @@ router.post('/',
       metadata: {
         submissionIP: req.ip,
         userAgent: req.headers['user-agent']
-      }
+      },
+      startupId: req.body.startupId || undefined
     });
 
     await questionnaire.save();
@@ -426,7 +427,7 @@ router.post('/admin/:id/create-sprint', authenticateAdmin, async (req, res, next
     }
 
     // Update questionnaire status and startup onboarding step
-    questionnaire.status = 'sprint_created';
+    questionnaire.status = 'proposal_created';
     await questionnaire.save();
 
     await Startup.findByIdAndUpdate(
@@ -918,8 +919,8 @@ router.post('/:id/schedule-meeting', authenticateStartup, async (req, res, next)
       return res.status(404).json({ success: false, message: 'Questionnaire not found' });
     }
     // Only allow if not already scheduled or sprint created
-    if (questionnaire.status === 'meeting_scheduled' || questionnaire.status === 'sprint_created') {
-      return res.status(400).json({ success: false, message: 'Meeting already scheduled or sprint already created.' });
+    if (questionnaire.status === 'meeting_scheduled' || questionnaire.status === 'proposal_created') {
+      return res.status(400).json({ success: false, message: 'Meeting already scheduled or proposal already created.' });
     }
     questionnaire.status = 'meeting_scheduled';
     await questionnaire.save();
