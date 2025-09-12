@@ -27,7 +27,7 @@ router.get('/by-sprint/:sprintId', authenticateAdmin, requireSprintPayment, asyn
     
     // Find existing board for this sprint (fix: use sprintId field)
     let board = await Board.findOne({ sprintId: sprintId })
-      .populate('createdBy', 'profile.firstName profile.lastName')
+      .populate('createdBy', 'profile.firstName profile.lastName profile.founderFirstName profile.founderLastName')
       .populate('sprintId', 'name type status progress assignedTeam')
       .populate('members.userId', 'profile.firstName profile.lastName profile.department');
     
@@ -88,17 +88,32 @@ router.get('/by-sprint/:sprintId', authenticateAdmin, requireSprintPayment, asyn
     // Get tasks for this board
     const tasks = await Task.find({ boardId: board._id })
       .populate('assigneeId', 'profile.firstName profile.lastName profile.avatar')
-      .populate('createdBy', 'profile.firstName profile.lastName')
+      .populate('createdBy', 'profile.firstName profile.lastName profile.founderFirstName profile.founderLastName')
       .populate('comments.authorId', 'profile.firstName profile.lastName')
       .sort({ position: 1, createdAt: -1 });
     
-    // Group tasks by column
-    const tasksByColumn = {};
-    board.columns.forEach(column => {
-      tasksByColumn[column._id] = tasks.filter(task => 
-        task.columnId && task.columnId.toString() === column._id.toString()
-      );
-    });
+const tasksWithCreatedBy = tasks.map(task => {
+  const taskObj = task.toObject();
+  if (task.createdByModel === 'Startup' && task.createdBy && task.createdBy.profile) {
+    taskObj.createdByName = `${task.createdBy.profile.founderFirstName || ''} ${task.createdBy.profile.founderLastName || ''}`.trim();
+  } else if (task.createdByModel === 'Admin' && task.createdBy && task.createdBy.profile) {
+    taskObj.createdByName = `${task.createdBy.profile.firstName || ''} ${task.createdBy.profile.lastName || ''}`.trim();
+  } else if (task.createdBy && task.createdBy.fullName) {
+    taskObj.createdByName = task.createdBy.fullName;
+  } else {
+    const pf = task.createdBy?.profile || {};
+    taskObj.createdByName = `${pf.founderFirstName || pf.firstName || ''} ${pf.founderLastName || pf.lastName || ''}`.trim();
+  }
+  return taskObj;
+});
+
+// Group tasks by column
+const tasksByColumn = {};
+board.columns.forEach(column => {
+  tasksByColumn[column._id] = tasksWithCreatedBy.filter(task =>
+    task.columnId && task.columnId.toString() === column._id.toString()
+  );
+});
     
     res.json({
       success: true,
@@ -150,7 +165,7 @@ router.get('/startup/by-sprint/:sprintId', authenticateStartup, async (req, res,
     }
     // Find existing board for this sprint
     const board = await Board.findOne({ sprintId: sprintId })
-      .populate('createdBy', 'profile.firstName profile.lastName')
+      .populate('createdBy', 'profile.firstName profile.lastName profile.founderFirstName profile.founderLastName')
       .populate('sprintId', 'name type status progress assignedTeam')
       .populate('members.userId', 'profile.firstName profile.lastName profile.department');
     if (!board) {
@@ -159,16 +174,29 @@ router.get('/startup/by-sprint/:sprintId', authenticateStartup, async (req, res,
     // Get tasks for this board
     const tasks = await Task.find({ boardId: board._id })
       .populate('assigneeId', 'profile.firstName profile.lastName profile.avatar')
-      .populate('createdBy', 'profile.firstName profile.lastName')
+      .populate('createdBy', 'profile.firstName profile.lastName profile.founderFirstName profile.founderLastName')
       .populate('comments.authorId', 'profile.firstName profile.lastName')
       .sort({ position: 1, createdAt: -1 });
-    // Group tasks by column
-    const tasksByColumn = {};
-    board.columns.forEach(column => {
-      tasksByColumn[column._id] = tasks.filter(task =>
-        task.columnId && task.columnId.toString() === column._id.toString()
-      );
-    });
+const tasksWithCreatedBy = tasks.map(task => {
+  const taskObj = task.toObject();
+  if (task.createdByModel === 'Startup' && task.createdBy && task.createdBy.profile) {
+    taskObj.createdByName = `${task.createdBy.profile.founderFirstName || ''} ${task.createdBy.profile.founderLastName || ''}`.trim();
+  } else if (task.createdByModel === 'Admin' && task.createdBy && task.createdBy.profile) {
+    taskObj.createdByName = `${task.createdBy.profile.firstName || ''} ${task.createdBy.profile.lastName || ''}`.trim();
+  } else {
+    const pf = task.createdBy?.profile || {};
+    taskObj.createdByName = `${pf.founderFirstName || pf.firstName || ''} ${pf.founderLastName || pf.lastName || ''}`.trim();
+  }
+  return taskObj;
+});
+
+// Group tasks by column
+const tasksByColumn = {};
+board.columns.forEach(column => {
+  tasksByColumn[column._id] = tasksWithCreatedBy.filter(task =>
+    task.columnId && task.columnId.toString() === column._id.toString()
+  );
+});
     res.json({
       success: true,
       data: {
