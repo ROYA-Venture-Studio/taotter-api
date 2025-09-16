@@ -74,7 +74,10 @@ const corsOptions = {
     const allowedOrigins = [
       'http://20.57.132.51:3000',
       'http://localhost:3000',
-      'http://localhost:3001'
+      'http://localhost:3001',
+      'http://localhost:8080',
+      'http://localhost:80',
+      'https://leansprintr.com'
     ];
     
     // Allow requests with no origin (mobile apps, Postman, etc.)
@@ -243,7 +246,10 @@ function startSocketServer() {
         process.env.ADMIN_FRONTEND_URL,
         'http://20.57.132.51:3000',
         'http://localhost:3000',
-        'http://localhost:3001'
+        'http://localhost:3001',
+        'http://localhost:8080',
+        'http://localhost:80',
+        'https://leansprintr.com'
       ].filter(Boolean),
       credentials: true
     }
