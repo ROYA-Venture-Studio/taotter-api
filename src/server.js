@@ -77,7 +77,8 @@ const corsOptions = {
       'http://localhost:3001',
       'http://localhost:8080',
       'http://localhost:80',
-      'https://leansprintr.com'
+      'https://leansprintr.com',
+      'https://www.leansprintr.com'
     ];
     
     // Allow requests with no origin (mobile apps, Postman, etc.)
@@ -86,16 +87,36 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      logger.warn(`CORS blocked request from origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
   exposedHeaders: ['X-Total-Count', 'X-Page-Count']
 };
 
 app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
+// Debug CORS requests in development
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    logger.info(`CORS Debug - Origin: ${req.headers.origin}, Method: ${req.method}, URL: ${req.url}`);
+    next();
+  });
+}
 
 // Rate limiting
 const limiter = rateLimit({
@@ -249,7 +270,8 @@ function startSocketServer() {
         'http://localhost:3001',
         'http://localhost:8080',
         'http://localhost:80',
-        'https://leansprintr.com'
+        'https://leansprintr.com',
+        'https://api-prod.leansprintr.com/'
       ].filter(Boolean),
       credentials: true
     }
