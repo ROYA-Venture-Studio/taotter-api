@@ -17,9 +17,8 @@ const emailTemplates = {
           Thank you for signing up with Leansprintr. Your request has been received by our admin team.
         </p>
         <p style="font-size: 16px; color: #444; margin-bottom: 24px;">
-          Please log in to your account to schedule a meeting with the Leansprintr team. We look forward to helping you accelerate your startup journey!
-        </p>
-        <a href="{{dashboardUrl}}" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Login to Leansprintr</a>
+          Next step: log in to your account and schedule a meeting with the Leansprintr team. We're excited to help you accelerate your startup journey!        </p>
+          <a href="https://leansprintr.com/startup/login" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Login to Leansprintr</a>
         <div style="margin-top: 40px; text-align: center;">
           <img src="https://taotterimgs.blob.core.windows.net/taotterimgs/leansprintr.png" alt="Leansprintr Logo" style="width: 120px; margin-top: 24px;" />
         </div>
@@ -28,17 +27,14 @@ const emailTemplates = {
     `
   },
   sprintAssigned: {
-    subject: 'Your Sprints Are Ready on Leansprintr',
+    subject: 'Your Sprints Are Ready on Leansprintr!',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); padding: 32px;">
-        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">Your Sprints Are Ready!</h1>
-        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">
-          Hi {{name}},
-        </p>
-        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">
-          Our admin team has reviewed your request and assigned sprints for you. Please log in to your account to select your preferred sprint and complete payment to get started.
-        </p>
-        <a href="{{dashboardUrl}}" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Choose Your Sprint</a>
+        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">Your Sprints Are Ready on Leansprintr!</h1>
+        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">Hi {{name}},</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">Great news! 🚀 Our admin team has reviewed your request and assigned sprints for you.</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">Please log in to your account to choose your preferred sprint and complete your payment to get started.</p>
+        <a href="https://leansprintr.com/startup/login" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Choose Your Sprint</a>
         <div style="margin-top: 40px; text-align: center;">
           <img src="https://taotterimgs.blob.core.windows.net/taotterimgs/leansprintr.png" alt="Leansprintr Logo" style="width: 120px; margin-top: 24px;" />
         </div>
@@ -47,17 +43,15 @@ const emailTemplates = {
     `
   },
   paymentConfirmed: {
-    subject: 'Your Payment Has Been Confirmed',
+    subject: 'Payment Confirmed! Your Sprint Awaits',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); padding: 32px;">
-        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">Payment Confirmed</h1>
-        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">
-          Hi {{name}},
-        </p>
-        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">
-          Thank you for your payment. You can now access your dashboard and view your sprint. Once the admin has added tasks to your sprint, you’ll be able to track your progress and collaborate with your team.
-        </p>
-        <a href="http://20.57.132.51:3000/startup/dashboard" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Go to Dashboard</a>
+        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">Payment Confirmed! Your Sprint Awaits</h1>
+        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">Hi {{name}},</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">Thank you for your payment! 🚀</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">You now have access to your dashboard, where you can view your sprint.</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">Once the admin adds tasks to your sprint, you’ll be able to track progress and collaborate seamlessly with your team.</p>
+        <a href="https://leansprintr.com/startup/dashboard" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Go to Dashboard</a>
         <div style="margin-top: 40px; text-align: center;">
           <img src="https://taotterimgs.blob.core.windows.net/taotterimgs/leansprintr.png" alt="Leansprintr Logo" style="width: 120px; margin-top: 24px;" />
         </div>
@@ -66,21 +60,17 @@ const emailTemplates = {
     `
   },
   tasksForReview: {
-    subject: 'Tasks Awaiting Your Review',
+    subject: 'A Task Is Ready for Your Review ✅',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); padding: 32px;">
-        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">Tasks Awaiting Your Review</h1>
-        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">
-          Hi {{name}},
-        </p>
-        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">
-          You have tasks on <strong>{{boardName}}</strong> that require your review. Please log in to your dashboard to review and provide feedback so your team can keep moving forward.
-        </p>
-        <a href="{{dashboardUrl}}" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Review Tasks</a>
+        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">A Task Is Ready for Your Review ✅</h1>
+        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">Hi {{name}},</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">One of your sprint tasks has been moved to the For Review column. Please log in to your Dashboard to review and provide feedback so we can keep things moving forward.</p>
+        <a href="https://leansprintr.com/startup/dashboard" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Review Sprint Task</a>
         <div style="margin-top: 40px; text-align: center;">
           <img src="https://taotterimgs.blob.core.windows.net/taotterimgs/leansprintr.png" alt="Leansprintr Logo" style="width: 120px; margin-top: 24px;" />
         </div>
-        <p style="margin-top: 30px; color: #6b7280; font-size: 15px;">Best regards,<br>The Leansprintr Team</p>
+        <p style="margin-top: 30px; color: #6b7280; font-size: 15px;">Best regards,<br>The LeanSprintr team</p>
       </div>
     `
   }
