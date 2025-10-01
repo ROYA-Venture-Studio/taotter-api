@@ -211,38 +211,40 @@ router.post('/:id/move', authenticateAdmin, async (req, res, next) => {
       logger.logError("Failed to update sprint task counts after task move", progressErr);
     }
 
-    // Only send email if status changed to "review"
+    // Only send email if status changed to "review" (async, non-blocking)
     if (oldStatus !== "review" && newStatus === "review") {
-      try {
-        // Find related sprint, questionnaire, and startup
-        const sprintId = board.sprintId;
-        if (sprintId) {
-          const Sprint = require('../models/Sprint');
-          const Questionnaire = require('../models/Questionnaire');
-          const Startup = require('../models/Startup');
-          const sprint = await Sprint.findById(sprintId);
-          if (sprint && sprint.questionnaireId) {
-            const questionnaire = await Questionnaire.findById(sprint.questionnaireId);
-            if (questionnaire && questionnaire.startupId) {
-              const startup = await Startup.findById(questionnaire.startupId);
-              if (startup && startup.email) {
-                const { sendEmail } = require('../utils/communications');
-                await sendEmail({
-                  to: startup.email,
-                  template: "tasksForReview",
-                  data: {
-                    name: startup.profile?.founderFirstName || "Founder",
-                    boardName: board.name || "Board",
-                    dashboardUrl: process.env.CLIENT_DASHBOARD_URL || "http://20.57.132.51:3000//startup/dashboard"
-                  }
-                });
+      setImmediate(async () => {
+        try {
+          // Find related sprint, questionnaire, and startup
+          const sprintId = board.sprintId;
+          if (sprintId) {
+            const Sprint = require('../models/Sprint');
+            const Questionnaire = require('../models/Questionnaire');
+            const Startup = require('../models/Startup');
+            const sprint = await Sprint.findById(sprintId);
+            if (sprint && sprint.questionnaireId) {
+              const questionnaire = await Questionnaire.findById(sprint.questionnaireId);
+              if (questionnaire && questionnaire.startupId) {
+                const startup = await Startup.findById(questionnaire.startupId);
+                if (startup && startup.email) {
+                  const { sendEmail } = require('../utils/communications');
+                  await sendEmail({
+                    to: startup.email,
+                    template: "tasksForReview",
+                    data: {
+                      name: startup.profile?.founderFirstName || "Founder",
+                      boardName: board.name || "Board",
+                      dashboardUrl: process.env.CLIENT_DASHBOARD_URL || "http://20.57.132.51:3000//startup/dashboard"
+                    }
+                  });
+                }
               }
             }
           }
+        } catch (emailErr) {
+          logger.logError("Failed to send review notification email to startup", emailErr);
         }
-      } catch (emailErr) {
-        logger.logError("Failed to send review notification email to startup", emailErr);
-      }
+      });
     }
 
     res.json({
@@ -472,39 +474,39 @@ router.post('/startup/:id/move', async (req, res, next) => {
       logger.logError("Failed to update sprint task counts after task move", progressErr);
     }
 
-    // Only send email if status changed to "review"
+    // Only send email if status changed to "review" (async, non-blocking)
     if (oldStatus !== "review" && newStatus === "review") {
-      try {
-        // Find related sprint, questionnaire, and startup
-        const sprintId = board.sprintId;
-        if (sprintId) {
-          const Sprint = require('../models/Sprint');
-          const Questionnaire = require('../models/Questionnaire');
-          const Startup = require('../models/Startup');
-          const sprint = await Sprint.findById(sprintId);
-          if (sprint && sprint.questionnaireId) {
-            const questionnaire = await Questionnaire.findById(sprint.questionnaireId);
-            if (questionnaire && questionnaire.startupId) {
-              const startup = await Startup.findById(questionnaire.startupId);
-              if (startup && startup.email) {
-                const { sendEmail } = require('../utils/communications');
-                await sendEmail({
-                  to: startup.email,
-                  subject: "Tasks Awaiting Your Review",
-                  template: "tasks-for-review",
-                  data: {
-                    name: startup.profile?.founderFirstName || "Founder",
-                    boardName: board.name || "Board",
-                    message: "You have tasks that require your review. Please log in to your dashboard to review them."
-                  }
-                });
+      setImmediate(async () => {
+        try {
+          // Find related sprint, questionnaire, and startup
+          const sprintId = board.sprintId;
+          if (sprintId) {
+            const Sprint = require('../models/Sprint');
+            const Questionnaire = require('../models/Questionnaire');
+            const Startup = require('../models/Startup');
+            const sprint = await Sprint.findById(sprintId);
+            if (sprint && sprint.questionnaireId) {
+              const questionnaire = await Questionnaire.findById(sprint.questionnaireId);
+              if (questionnaire && questionnaire.startupId) {
+                const startup = await Startup.findById(questionnaire.startupId);
+                if (startup && startup.email) {
+                  const { sendEmail } = require('../utils/communications');
+                  await sendEmail({
+                    to: startup.email,
+                    template: "tasksForReview",
+                    data: {
+                      name: startup.profile?.founderFirstName || "Founder",
+                      boardName: board.name || "Board"
+                    }
+                  });
+                }
               }
             }
           }
+        } catch (emailErr) {
+          logger.logError("Failed to send review notification email to startup", emailErr);
         }
-      } catch (emailErr) {
-        logger.logError("Failed to send review notification email to startup", emailErr);
-      }
+      });
     }
 
     res.json({

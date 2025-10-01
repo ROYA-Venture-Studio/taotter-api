@@ -59,6 +59,21 @@ const emailTemplates = {
       </div>
     `
   },
+  'package-selected': {
+    subject: 'You Selected: {{packageName}}',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); padding: 32px;">
+        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">You Selected: {{packageName}}</h1>
+        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">Hi {{fullName}}!</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">You've selected the package: <strong>{{packageName}}</strong> for your startup. Once your payment is confirmed, the next step is to get started on your sprint, so our team can help bring your idea to life.</p>
+        <a href="https://leansprintr.com/startup/dashboard" style="background-color: #EB5E28; color: #fff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; display: inline-block; margin-bottom: 32px;">Get Started</a>
+        <div style="margin-top: 40px; text-align: center;">
+          <img src="https://taotterimgs.blob.core.windows.net/taotterimgs/leansprintr.png" alt="Leansprintr Logo" style="width: 120px; margin-top: 24px;" />
+        </div>
+        <p style="margin-top: 30px; color: #6b7280; font-size: 15px;">Best regards,<br>The LeanSprintr Team</p>
+      </div>
+    `
+  },
   tasksForReview: {
     subject: 'A Task Is Ready for Your Review ✅',
     html: `

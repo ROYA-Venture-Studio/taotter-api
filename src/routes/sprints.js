@@ -502,24 +502,29 @@ router.post('/:id/select-package', authenticateStartup, validate(require('joi').
       'onboarding.lastUpdated': new Date()
     });
     
-    // Send confirmation email
-    try {
-      await sendEmail({
-        to: req.user.email,
-        subject: `Package Selected - ${sprint.name}`,
-        template: 'package-selected',
-        data: {
-          startupName: req.user.profile.founderFirstName,
-          sprintName: sprint.name,
-          packageName: selectedPackage.name,
-          packagePrice: selectedPackage.price,
-          packageCurrency: selectedPackage.currency,
-          estimatedDuration: selectedPackage.duration
-        }
-      });
-    } catch (emailError) {
-      logger.logError('Package selection confirmation email failed', emailError);
-    }
+    // Send confirmation email asynchronously (don't wait for it)
+    setImmediate(async () => {
+      try {
+        const fullName = `${req.user.profile.founderFirstName || ''} ${req.user.profile.founderLastName || ''}`.trim() || req.user.email;
+        
+        await sendEmail({
+          to: req.user.email,
+          subject: `You Selected: ${selectedPackage.name}`,
+          template: 'package-selected',
+          data: {
+            fullName: fullName,
+            packageName: selectedPackage.name,
+            sprintName: sprint.name,
+            packagePrice: selectedPackage.price || selectedPackage.amount,
+            packageCurrency: selectedPackage.currency || 'QAR',
+            estimatedDuration: selectedPackage.duration || selectedPackage.engagementHours,
+            dashboardUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/startup/dashboard`
+          }
+        });
+      } catch (emailError) {
+        logger.logError('Package selection confirmation email failed', emailError);
+      }
+    });
     
     res.json({
       success: true,
