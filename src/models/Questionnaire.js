@@ -23,7 +23,7 @@ const questionnaireSchema = new mongoose.Schema({
   basicInfo: {
     startupName: {
       type: String,
-      required: [true, 'Startup name is required'],
+      required: false, // Make optional for existing startups, required for anonymous submissions
       trim: true,
       maxlength: [100, 'Startup name cannot exceed 100 characters']
     },
@@ -36,20 +36,15 @@ const questionnaireSchema = new mongoose.Schema({
       type: String,
       required: [true, 'Task description is required'],
       trim: true,
-      minlength: [10, 'Task description must be at least 10 characters'],
       maxlength: [2000, 'Task description cannot exceed 2000 characters']
     },
     startupStage: {
       type: String,
       required: [true, 'Startup stage is required'],
       enum: [
-        'idea',
-        'prototype',
-        'mvp',
-        'validation',
-        'early-stage',
-        'growth',
-        'scaling'
+        'pre-seed',
+        'seed-a',
+        'seed-b'
       ],
       index: true
     },
@@ -57,7 +52,6 @@ const questionnaireSchema = new mongoose.Schema({
       type: String,
       required: [true, 'Key goals are required'],
       trim: true,
-      minlength: [10, 'Key goals must be at least 10 characters'],
       maxlength: [1000, 'Key goals cannot exceed 1000 characters']
     },
     timeCommitment: {

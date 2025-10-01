@@ -104,17 +104,13 @@ const questionnaireSchemas = {
     basicInfo: Joi.object({
       startupName: Joi.string().trim().min(1).max(100).required(),
       taskType: Joi.string().trim().min(1).max(100).required(),
-      taskDescription: Joi.string().trim().min(10).max(2000).required(),
+      taskDescription: Joi.string().trim().min(1).max(2000).required(),
       startupStage: Joi.string().valid(
-        'idea',
-        'prototype',
-        'mvp',
-        'validation',
-        'early-stage',
-        'growth',
-        'scaling'
+        'pre-seed',
+        'seed-a',
+        'seed-b'
       ).required(),
-      keyGoals: Joi.string().trim().min(10).max(1000).required(),
+      keyGoals: Joi.string().trim().min(1).max(1000).required(),
       timeCommitment: Joi.string().valid('full-time', 'part-time').required()
     }).optional(),
 
@@ -142,21 +138,53 @@ const questionnaireSchemas = {
     }).optional()
   }),
 
+  // New schema for existing startups (startupName is optional)
+  createForStartup: Joi.object({
+    basicInfo: Joi.object({
+      startupName: Joi.string().trim().min(1).max(100).optional(),
+      taskType: Joi.string().trim().min(1).max(100).required(),
+      taskDescription: Joi.string().trim().min(1).max(2000).required(),
+      startupStage: Joi.string().valid(
+        'pre-seed',
+        'seed-a',
+        'seed-b'
+      ).required(),
+      keyGoals: Joi.string().trim().min(1).max(1000).required(),
+      timeCommitment: Joi.string().valid('full-time', 'part-time').required()
+    }).optional(),
+
+    requirements: Joi.object({
+      milestones: Joi.array().items(
+        Joi.string().trim()
+      ).optional(),
+      timeline: Joi.string().valid(
+        '1-2 weeks',
+        '3-4 weeks',
+        '1-2 months',
+        '3-6 months',
+        '6+ months'
+      ).optional(),
+      budgetRange: Joi.string().trim().optional()
+    }).optional(),
+
+    serviceSelection: Joi.object({
+      selectedService: Joi.string().trim().allow('').optional(),
+      isCustom: Joi.boolean().optional(),
+      urgency: Joi.string().valid('low', 'medium', 'high', 'urgent').optional()
+    }).optional()
+  }),
+
   update: Joi.object({
     basicInfo: Joi.object({
       startupName: Joi.string().trim().min(1).max(100).optional(),
       taskType: Joi.string().trim().min(1).max(100).optional(),
-      taskDescription: Joi.string().trim().min(10).max(2000).optional(),
+      taskDescription: Joi.string().trim().min(1).max(2000).optional(),
       startupStage: Joi.string().valid(
-        'idea',
-        'prototype',
-        'mvp',
-        'validation',
-        'early-stage',
-        'growth-stage',
-        'scaling'
+        'pre-seed',
+        'seed-a',
+        'seed-b'
       ).optional(),
-      keyGoals: Joi.string().trim().min(10).max(1000).optional(),
+      keyGoals: Joi.string().trim().min(1).max(1000).optional(),
       timeCommitment: Joi.string().valid('full-time', 'part-time').optional()
     }).optional(),
 

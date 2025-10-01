@@ -14,18 +14,44 @@ const router = express.Router();
 // @access  Private (Startup)
 const { v4: uuidv4 } = require('uuid');
 
-router.post('/',
-  validate(questionnaireSchemas.create), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
-    const { basicInfo, requirements, serviceSelection } = req.body;
+    const { basicInfo, requirements, serviceSelection, startupId } = req.body;
 
-    // Generate a temporaryId for anonymous submission
+    // Determine which validation schema to use
+    const hasStartupId = startupId || (req.user && req.user.id);
+    const validationSchema = hasStartupId ? questionnaireSchemas.createForStartup : questionnaireSchemas.create;
+    
+    // Validate request body
+    const { error } = validationSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        details: error.details.map(detail => detail.message)
+      });
+    }
+
+    // Generate a temporaryId for submission tracking
     const temporaryId = uuidv4();
+
+    // If startupId is provided but no startupName, get it from the startup record
+    let processedBasicInfo = { ...basicInfo };
+    if (hasStartupId && (!basicInfo?.startupName || basicInfo.startupName.trim() === '')) {
+      try {
+        const startup = await Startup.findById(hasStartupId);
+        if (startup && startup.profile && startup.profile.companyName) {
+          processedBasicInfo.startupName = startup.profile.companyName;
+        }
+      } catch (err) {
+        console.warn('Could not retrieve startup name:', err.message);
+      }
+    }
 
     // Create questionnaire with temporaryId (and startupId if provided)
     const questionnaire = new Questionnaire({
       temporaryId,
-      basicInfo,
+      basicInfo: processedBasicInfo,
       requirements,
       serviceSelection,
       status: 'submitted',
@@ -34,7 +60,7 @@ router.post('/',
         submissionIP: req.ip,
         userAgent: req.headers['user-agent']
       },
-      startupId: req.body.startupId || undefined
+      startupId: hasStartupId || undefined
     });
 
     await questionnaire.save();
