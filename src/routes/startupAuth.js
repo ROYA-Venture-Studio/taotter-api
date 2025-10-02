@@ -240,4 +240,151 @@ router.post('/login', loginRateLimit, validate(loginSchema), async (req, res, ne
 });
 
 // ... rest of the file remains unchanged ...
+
+// @route   POST /api/startup/auth/forgot-password
+// @desc    Send password reset code to email
+// @access  Public
+router.post('/forgot-password', validate(Joi.object({
+  email: Joi.string().email().required()
+})), async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    
+    // Find startup by email
+    const startup = await Startup.findOne({ email });
+    if (!startup) {
+      // Don't reveal if email exists or not for security
+      return res.json({
+        success: true,
+        message: 'If the email exists, a password reset code has been sent.'
+      });
+    }
+    
+    // Generate 6-digit reset code
+    const resetCode = crypto.randomInt(100000, 999999).toString();
+    const resetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    
+    // Save reset code to startup
+    startup.resetPassword = {
+      code: resetCode,
+      expiresAt: resetExpires,
+      attempts: 0
+    };
+    await startup.save();
+    
+    // Send email with reset code
+    try {
+      await sendEmail({
+        to: email,
+        template: 'passwordReset',
+        data: {
+          name: startup.profile?.founderFirstName || 'User',
+          resetCode: resetCode,
+          expiresIn: '10 minutes'
+        }
+      });
+    } catch (emailError) {
+      logger.logError('Failed to send password reset email', emailError);
+      return next(new AppError('Failed to send reset email. Please try again.', 500, 'EMAIL_SEND_FAILED'));
+    }
+    
+    logger.logAuth('PASSWORD_RESET_REQUESTED', email, req.ip);
+    
+    res.json({
+      success: true,
+      message: 'If the email exists, a password reset code has been sent.'
+    });
+    
+  } catch (error) {
+    logger.logError('Password reset request failed', error);
+    next(error);
+  }
+});
+
+// @route   POST /api/startup/auth/verify-reset-code
+// @desc    Verify password reset code
+// @access  Public
+router.post('/verify-reset-code', validate(Joi.object({
+  email: Joi.string().email().required(),
+  code: Joi.string().length(6).pattern(/^\d+$/).required()
+})), async (req, res, next) => {
+  try {
+    const { email, code } = req.body;
+    
+    // Find startup with valid reset code
+    const startup = await Startup.findOne({
+      email,
+      'resetPassword.code': code,
+      'resetPassword.expiresAt': { $gt: new Date() }
+    });
+    
+    if (!startup) {
+      return next(new AppError('Invalid or expired reset code', 400, 'INVALID_RESET_CODE'));
+    }
+    
+    // Check attempts limit (max 3 attempts)
+    if (startup.resetPassword.attempts >= 3) {
+      return next(new AppError('Too many failed attempts. Please request a new reset code.', 429, 'TOO_MANY_ATTEMPTS'));
+    }
+    
+    // Increment attempts
+    startup.resetPassword.attempts += 1;
+    await startup.save();
+    
+    logger.logAuth('PASSWORD_RESET_CODE_VERIFIED', email, req.ip);
+    
+    res.json({
+      success: true,
+      message: 'Reset code verified successfully',
+      data: {
+        verified: true
+      }
+    });
+    
+  } catch (error) {
+    logger.logError('Reset code verification failed', error);
+    next(error);
+  }
+});
+
+// @route   POST /api/startup/auth/reset-password
+// @desc    Reset password using verified code
+// @access  Public
+router.post('/reset-password', validate(Joi.object({
+  email: Joi.string().email().required(),
+  code: Joi.string().length(6).pattern(/^\d+$/).required(),
+  newPassword: Joi.string().min(8).required()
+})), async (req, res, next) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    
+    // Find startup with valid reset code
+    const startup = await Startup.findOne({
+      email,
+      'resetPassword.code': code,
+      'resetPassword.expiresAt': { $gt: new Date() }
+    });
+    
+    if (!startup) {
+      return next(new AppError('Invalid or expired reset code', 400, 'INVALID_RESET_CODE'));
+    }
+    
+    // Update password
+    startup.password = newPassword; // Will be hashed by pre-save middleware
+    startup.resetPassword = undefined; // Clear reset code
+    await startup.save();
+    
+    logger.logAuth('PASSWORD_RESET_COMPLETED', email, req.ip);
+    
+    res.json({
+      success: true,
+      message: 'Password reset successfully'
+    });
+    
+  } catch (error) {
+    logger.logError('Password reset failed', error);
+    next(error);
+  }
+});
+
 module.exports = router;
