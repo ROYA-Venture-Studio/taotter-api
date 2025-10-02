@@ -74,6 +74,25 @@ const emailTemplates = {
       </div>
     `
   },
+  passwordReset: {
+    subject: 'Password Reset Code for Leansprintr',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); padding: 32px;">
+        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">Password Reset Request</h1>
+        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">Hi {{name}},</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">You requested a password reset for your Leansprintr account. Use the code below to reset your password:</p>
+        <div style="background: #f8f9fa; padding: 24px; border-radius: 8px; text-align: center; margin: 24px 0;">
+          <h2 style="color: #EB5E28; font-size: 32px; letter-spacing: 4px; margin: 0;">{{resetCode}}</h2>
+        </div>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">This code will expire in {{expiresIn}}. If you didn't request this password reset, please ignore this email.</p>
+        <p style="font-size: 14px; color: #6b7280; margin-bottom: 24px;">For security reasons, never share this code with anyone.</p>
+        <div style="margin-top: 40px; text-align: center;">
+          <img src="https://taotterimgs.blob.core.windows.net/taotterimgs/leansprintr.png" alt="Leansprintr Logo" style="width: 120px; margin-top: 24px;" />
+        </div>
+        <p style="margin-top: 30px; color: #6b7280; font-size: 15px;">Best regards,<br>The Leansprintr Team</p>
+      </div>
+    `
+  },
   tasksForReview: {
     subject: 'A Task Is Ready for Your Review ✅',
     html: `

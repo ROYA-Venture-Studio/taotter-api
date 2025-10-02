@@ -85,6 +85,16 @@ const startupSchema = new mongoose.Schema({
     }
   },
   
+  // Password reset functionality
+  resetPassword: {
+    code: String,
+    expiresAt: Date,
+    attempts: {
+      type: Number,
+      default: 0
+    }
+  },
+  
   authentication: {
     refreshTokens: [{
       token: String,
