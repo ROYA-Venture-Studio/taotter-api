@@ -106,29 +106,30 @@ const initializeSocketIO = (socketIO) => {
           return;
         }
 
-        // Save message to database
-        const message = new Message({
-          chatId: conversationId,
+        // Build message object for Chat.messages array (consistent with API route)
+        const messageObj = {
           senderType: socket.userRole === 'admin' || socket.userRole === 'super_admin' ? 'admin' : 'startup',
           senderId: userId,
           content,
           messageType,
           createdAt: new Date()
-        });
-        await message.save();
+        };
 
-        // Update chat lastMessageAt
-        await Chat.findByIdAndUpdate(conversationId, { lastMessageAt: new Date() });
+        // Push message to chat's messages array
+        chat.messages.push(messageObj);
+        chat.lastMessageAt = new Date();
+        await chat.save();
 
         const messageData = {
-          _id: message._id,
+          _id: chat.messages[chat.messages.length - 1]._id,
           conversationId,
+          chatId: conversationId, // Add both for compatibility
           senderId: userId,
-          senderType: message.senderType,
+          senderType: messageObj.senderType,
           senderName: `${socket.userData.firstName} ${socket.userData.lastName}`,
           content,
           messageType,
-          createdAt: message.createdAt
+          createdAt: messageObj.createdAt
         };
 
         console.log('Broadcasting message to conversation:', conversationId, messageData);

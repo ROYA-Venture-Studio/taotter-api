@@ -74,6 +74,31 @@ const emailTemplates = {
       </div>
     `
   },
+  meetingScheduled: {
+    subject: 'Meeting Confirmed - Leansprintr Discovery Call',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); padding: 32px;">
+        <h1 style="color: #EB5E28; font-size: 26px; margin-bottom: 16px;">Meeting Confirmed! 🎉</h1>
+        <p style="font-size: 17px; color: #222; margin-bottom: 18px;">Hi {{name}},</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">Great news! Your discovery call with the Leansprintr team has been scheduled.</p>
+        
+        <div style="background: #f8f9fa; padding: 24px; border-radius: 8px; margin: 24px 0;">
+          <h3 style="color: #EB5E28; margin: 0 0 16px 0;">Meeting Details</h3>
+          <p style="margin: 8px 0; color: #444;"><strong>Date:</strong> {{meetingDate}}</p>
+          <p style="margin: 8px 0; color: #444;"><strong>Time:</strong> {{meetingTime}}</p>
+          <p style="margin: 8px 0; color: #444;"><strong>Meeting Link:</strong> <a href="{{meetingUrl}}" style="color: #EB5E28;">Join Meeting</a></p>
+        </div>
+        
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">We're excited to learn more about your startup and discuss how Leansprintr can help accelerate your growth!</p>
+        <p style="font-size: 16px; color: #444; margin-bottom: 24px;">Please make sure to join on time, and feel free to prepare any questions you'd like to discuss.</p>
+        
+        <div style="margin-top: 40px; text-align: center;">
+          <img src="https://taotterimgs.blob.core.windows.net/taotterimgs/leansprintr.png" alt="Leansprintr Logo" style="width: 120px; margin-top: 24px;" />
+        </div>
+        <p style="margin-top: 30px; color: #6b7280; font-size: 15px;">Best regards,<br>The Leansprintr Team</p>
+      </div>
+    `
+  },
   passwordReset: {
     subject: 'Password Reset Code for Leansprintr',
     html: `

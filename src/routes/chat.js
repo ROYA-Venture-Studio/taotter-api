@@ -55,6 +55,62 @@ router.post('/start', authenticateAdmin, async (req, res, next) => {
 });
 
 /**
+ * @route   POST /api/chat/create
+ * @desc    Create a chat with admin (startup only)
+ * @access  Private (Startup)
+ * @body    { adminEmail, message }
+ */
+router.post('/create', authenticateStartup, async (req, res, next) => {
+  try {
+    const { adminEmail = 'admin@leansprintr.com', message } = req.body;
+    
+    // Find the admin by email
+    const admin = await Admin.findOne({ email: adminEmail });
+    if (!admin) {
+      return next(new AppError('Admin not found', 404));
+    }
+
+    // Check if chat already exists
+    let chat = await Chat.findOne({ 
+      adminId: admin._id, 
+      startupId: req.user._id 
+    });
+
+    if (!chat) {
+      // Create new chat
+      chat = new Chat({ 
+        adminId: admin._id, 
+        startupId: req.user._id 
+      });
+      await chat.save();
+    }
+
+    // If message provided, send initial message
+    if (message && message.trim()) {
+      const newMessage = new Message({
+        chatId: chat._id,
+        senderId: req.user._id,
+        senderType: 'startup',
+        content: message.trim(),
+        messageType: 'text'
+      });
+      await newMessage.save();
+
+      // Update chat's last message timestamp
+      chat.lastMessageAt = new Date();
+      await chat.save();
+    }
+
+    res.json({
+      success: true,
+      data: { chat }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * @route   GET /api/chat/list
  * @desc    Get all chats for current user (admin or startup)
  * @access  Private
@@ -89,12 +145,17 @@ router.get('/:chatId/messages', authenticateAnyUser, async (req, res, next) => {
     const { chatId } = req.params;
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
+    
     const chat = await Chat.findById(chatId);
     if (!chat) return next(new AppError('Chat not found', 404));
+    
     const totalMessages = chat.messages.length;
     const start = Math.max(totalMessages - page * pageSize, 0);
     const end = totalMessages - (page - 1) * pageSize;
     const messages = chat.messages.slice(start, end);
+    
+    console.log(`Retrieved ${messages.length} messages for chat ${chatId} from Chat.messages array`);
+    
     res.json({
       success: true,
       data: {
@@ -186,24 +247,39 @@ router.post('/:chatId/message', authenticateAnyUser, upload.single('file'), asyn
       createdAt: new Date()
     };
 
-    // Push message to chat's messages array
+    // Push message to chat's messages array  
     const chat = await Chat.findById(chatId);
     if (!chat) return next(new AppError('Chat not found', 404));
     chat.messages.push(messageObj);
     chat.lastMessageAt = new Date();
     await chat.save();
 
-    // Emit socket event for real-time update
+    // Emit socket event for real-time update (consistent format with socketManager)
     try {
       const io = req.app.get('io');
       if (io) {
-        io.to(`conversation:${chatId}`).emit('new_message', {
-          ...messageObj,
+        const socketMessage = {
           _id: chat.messages[chat.messages.length - 1]._id,
-          conversationId: chatId
-        });
+          conversationId: chatId,
+          chatId: chatId, // Add both for compatibility
+          senderId: senderId,
+          senderType: senderType,
+          content: content,
+          messageType: messageType,
+          fileUrl: fileUrl,
+          fileName: fileName,
+          fileSize: fileSize,
+          mimeType: mimeType,
+          imageUrl: imageUrl,
+          voiceDuration: messageType === "voice" ? Number(voiceDuration) || null : null,
+          createdAt: chat.messages[chat.messages.length - 1].createdAt
+        };
+        
+        console.log('API emitting socket message to conversation:', chatId, socketMessage);
+        io.to(`conversation:${chatId}`).emit('new_message', socketMessage);
       }
     } catch (e) {
+      console.error('Socket emit error:', e);
       // Ignore socket errors
     }
 
