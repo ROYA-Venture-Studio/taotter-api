@@ -144,7 +144,30 @@ const startupSchema = new mongoose.Schema({
       ],
       default: 'profile'
     },
-    completedAt: Date
+    completedAt: Date,
+    meetingScheduled: {
+      type: Boolean,
+      default: false
+    },
+    meetingDetails: {
+      calendlyEventId: String,
+      scheduledAt: Date,
+      meetingUrl: String,
+      attendeeName: String,
+      attendeeEmail: String,
+      status: {
+        type: String,
+        enum: ['scheduled', 'completed', 'canceled', 'no_show'],
+        default: 'scheduled'
+      },
+      eventName: String,
+      canceledAt: Date,
+      completedAt: Date
+    },
+    lastUpdated: {
+      type: Date,
+      default: Date.now
+    }
   },
   
   // Startup metrics and tracking

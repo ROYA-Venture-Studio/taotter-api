@@ -28,6 +28,7 @@ const tasksRoutes = require('./routes/tasks');
 const taskCollaborationRoutes = require('./routes/task-collaboration');
 const chatRoutes = require('./routes/chat');
 const analyticsRoutes = require('./routes/analytics');
+const calendlyWebhookRoutes = require('./routes/calendlyWebhook');
 
 const app = express();
 
@@ -201,6 +202,7 @@ app.use('/api/tasks', tasksRoutes);
 app.use('/api/task-collaboration', taskCollaborationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/calendly', calendlyWebhookRoutes);
 
 // API base route
 app.get('/api', (req, res) => {
