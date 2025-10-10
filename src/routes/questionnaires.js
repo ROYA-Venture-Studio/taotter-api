@@ -647,12 +647,12 @@ router.post('/:id/review', authenticateAdmin, validate(questionnaireSchemas.revi
     }
     
     // Log the review action
-    logger.logInfo(`Questionnaire ${status} by admin ${req.user._id}`, {
-      questionnaireId: questionnaire._id,
-      startupId: questionnaire.startupId._id,
-      adminId: req.user._id,
-      status: status
-    });
+    // logger.logInfo(`Questionnaire ${status} by admin ${req.user._id}`, {
+    //   questionnaireId: questionnaire._id,
+    //   startupId: questionnaire.startupId._id,
+    //   adminId: req.user._id,
+    //   status: status
+    // });
     
     res.json({
       success: true,
@@ -816,10 +816,10 @@ router.post('/link', authenticateStartup, async (req, res, next) => {
     if (startup && questionnaire.basicInfo?.startupName && !startup.profile?.companyName) {
       startup.profile.companyName = questionnaire.basicInfo.startupName;
       await startup.save();
-      logger.logInfo('Updated startup companyName from questionnaire startupName', {
-        startupId: req.user._id,
-        companyName: questionnaire.basicInfo.startupName
-      });
+      // logger.logInfo('Updated startup companyName from questionnaire startupName', {
+      //   startupId: req.user._id,
+      //   companyName: questionnaire.basicInfo.startupName
+      // });
     }
 
     // Set onboarding.currentStep to 'pending_review' for the startup
@@ -1262,12 +1262,12 @@ router.post('/:id/review', authenticateAdmin, validate(questionnaireSchemas.revi
     }
     
     // Log the review action
-    logger.logInfo(`Questionnaire ${status} by admin ${req.user._id}`, {
-      questionnaireId: questionnaire._id,
-      startupId: questionnaire.startupId._id,
-      adminId: req.user._id,
-      status: status
-    });
+    // logger.logInfo(`Questionnaire ${status} by admin ${req.user._id}`, {
+    //   questionnaireId: questionnaire._id,
+    //   startupId: questionnaire.startupId._id,
+    //   adminId: req.user._id,
+    //   status: status
+    // });
     
     res.json({
       success: true,
@@ -1429,10 +1429,10 @@ router.post('/link', authenticateStartup, async (req, res, next) => {
     if (startup && questionnaire.basicInfo?.startupName && !startup.profile?.companyName) {
       startup.profile.companyName = questionnaire.basicInfo.startupName;
       await startup.save();
-      logger.logInfo('Updated startup companyName from questionnaire startupName', {
-        startupId: req.user._id,
-        companyName: questionnaire.basicInfo.startupName
-      });
+      // logger.logInfo('Updated startup companyName from questionnaire startupName', {
+      //   startupId: req.user._id,
+      //   companyName: questionnaire.basicInfo.startupName
+      // });
     }
 
     // Set onboarding.currentStep to 'pending_review' for the startup
