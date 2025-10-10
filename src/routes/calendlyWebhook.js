@@ -104,10 +104,28 @@ async function handleInviteeCreated(payload) {
   try {
     logger.info('Processing invitee.created event', { payload });
     
-    const { invitee, event: scheduledEvent } = payload;
+    // Calendly's new payload structure: invitee data is in the root payload
+    const invitee = {
+      email: payload.email,
+      name: payload.name,
+      uri: payload.uri,
+      timezone: payload.timezone,
+      questions_and_responses: payload.questions_and_answers || []
+    };
     
-    if (!invitee || !scheduledEvent) {
-      logger.error('Missing required data in invitee.created payload', { payload });
+    const scheduledEvent = payload.scheduled_event;
+    
+    console.log('🔍 WEBHOOK DEBUG: Extracted data:');
+    console.log('   Email:', invitee.email);
+    console.log('   Name:', invitee.name);
+    console.log('   Event URI:', scheduledEvent?.uri);
+    
+    if (!invitee.email || !scheduledEvent) {
+      logger.error('Missing required data in invitee.created payload', { 
+        hasEmail: !!invitee.email,
+        hasScheduledEvent: !!scheduledEvent,
+        payload 
+      });
       return;
     }
 

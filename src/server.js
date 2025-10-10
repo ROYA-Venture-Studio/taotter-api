@@ -141,6 +141,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
+app.use('/api/calendly', calendlyWebhookRoutes);
 // Body parsing middleware
 app.use(express.json({ 
   limit: '10mb',
@@ -152,7 +153,6 @@ app.use(express.json({
 
 // IMPORTANT: Calendly webhook route MUST come BEFORE express.json() 
 // because it needs raw body for signature verification
-app.use('/api/calendly', calendlyWebhookRoutes);
 
 // Body parsing middleware
 app.use(express.json({ 
