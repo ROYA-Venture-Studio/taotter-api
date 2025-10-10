@@ -148,7 +148,19 @@ app.use(express.json({
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+//app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// IMPORTANT: Calendly webhook route MUST come BEFORE express.json() 
+// because it needs raw body for signature verification
+app.use('/api/calendly', calendlyWebhookRoutes);
+
+// Body parsing middleware
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // Data sanitization against NoSQL query injection
 app.use(mongoSanitize());
@@ -203,7 +215,7 @@ app.use('/api/tasks', tasksRoutes);
 app.use('/api/task-collaboration', taskCollaborationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/calendly', calendlyWebhookRoutes);
+// Calendly webhook moved BEFORE express.json() middleware
 
 // API base route
 app.get('/api', (req, res) => {
