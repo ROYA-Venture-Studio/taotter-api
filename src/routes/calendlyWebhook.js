@@ -69,11 +69,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res, ne
   // TEMPORARILY SKIP SIGNATURE VERIFICATION FOR TESTING
   console.log('🔧 WEBHOOK DEBUG: Signature verification DISABLED for testing');
   console.log('📨 Headers:', req.headers);
-  console.log('📝 Body preview:', req.body.toString().substring(0, 200));
+  console.log('📝 Raw Body Length:', req.body.length);
+  console.log('📝 Body Content:', req.body.toString());
   next();
 }, async (req, res) => {
   try {
-    const event = JSON.parse(req.body);
+    const event = JSON.parse(req.body.toString()); // Convert raw buffer to string then parse
     logger.info('Calendly webhook received', { 
       event: event.event, 
       created_at: event.created_at,
