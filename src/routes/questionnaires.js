@@ -811,6 +811,17 @@ router.post('/link', authenticateStartup, async (req, res, next) => {
     questionnaire.temporaryId = undefined;
     await questionnaire.save();
 
+    // Update startup's companyName from questionnaire's startupName (if not already set)
+    const startup = await Startup.findById(req.user._id);
+    if (startup && questionnaire.basicInfo?.startupName && !startup.profile?.companyName) {
+      startup.profile.companyName = questionnaire.basicInfo.startupName;
+      await startup.save();
+      logger.logInfo('Updated startup companyName from questionnaire startupName', {
+        startupId: req.user._id,
+        companyName: questionnaire.basicInfo.startupName
+      });
+    }
+
     // Set onboarding.currentStep to 'pending_review' for the startup
     await Startup.findByIdAndUpdate(
       req.user._id,
@@ -1412,6 +1423,17 @@ router.post('/link', authenticateStartup, async (req, res, next) => {
     questionnaire.startupId = req.user._id;
     questionnaire.temporaryId = undefined;
     await questionnaire.save();
+
+    // Update startup's companyName from questionnaire's startupName (if not already set)
+    const startup = await Startup.findById(req.user._id);
+    if (startup && questionnaire.basicInfo?.startupName && !startup.profile?.companyName) {
+      startup.profile.companyName = questionnaire.basicInfo.startupName;
+      await startup.save();
+      logger.logInfo('Updated startup companyName from questionnaire startupName', {
+        startupId: req.user._id,
+        companyName: questionnaire.basicInfo.startupName
+      });
+    }
 
     // Set onboarding.currentStep to 'pending_review' for the startup
     await Startup.findByIdAndUpdate(

@@ -19,6 +19,10 @@ const chatSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  lastEmailNotificationAt: {
+    type: Date,
+    default: null, // Will be set when first email notification is sent
+  },
   messages: [{
     _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
     senderType: { type: String, enum: ['admin', 'startup'], required: true },
