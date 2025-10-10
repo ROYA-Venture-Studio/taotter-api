@@ -12,7 +12,9 @@
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "db:seed": "node src/scripts/seedDatabase.js",
-    "db:reset": "node src/scripts/resetDatabase.js"
+    "db:reset": "node src/scripts/resetDatabase.js",
+    "calendly:get-user": "node get_user.js",
+    "calendly:create-webhook": "node create_webhook.js"
   },
   "keywords": [
     "startup",
