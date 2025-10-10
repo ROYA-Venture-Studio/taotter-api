@@ -110,8 +110,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Handle preflight requests explicitly
-app.options('*', cors(corsOptions));
+// Handle preflight requests explicitly - REMOVED to prevent duplicate headers
+// app.options('*', cors(corsOptions));
 
 // Debug CORS requests in development
 if (process.env.NODE_ENV !== 'production') {
