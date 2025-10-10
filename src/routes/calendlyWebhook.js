@@ -173,6 +173,10 @@ async function handleInviteeCreated(payload) {
 
     await startup.save();
 
+    console.log('✅ WEBHOOK SUCCESS: Database updated for startup:', startup._id);
+    console.log('   meetingScheduled:', startup.onboarding.meetingScheduled);
+    console.log('   currentStep:', startup.onboarding.currentStep);
+
     // Send confirmation email
     try {
       await sendEmail({
