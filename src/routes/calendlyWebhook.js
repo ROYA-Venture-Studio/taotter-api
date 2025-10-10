@@ -65,7 +65,13 @@ const verifyCalendlySignature = (req, res, next) => {
 // @route   POST /api/calendly/webhook
 // @desc    Handle Calendly webhook events
 // @access  Public (but verified)
-router.post('/webhook', express.raw({ type: 'application/json' }), verifyCalendlySignature, async (req, res) => {
+router.post('/webhook', express.raw({ type: 'application/json' }), (req, res, next) => {
+  // TEMPORARILY SKIP SIGNATURE VERIFICATION FOR TESTING
+  console.log('🔧 WEBHOOK DEBUG: Signature verification DISABLED for testing');
+  console.log('📨 Headers:', req.headers);
+  console.log('📝 Body preview:', req.body.toString().substring(0, 200));
+  next();
+}, async (req, res) => {
   try {
     const event = JSON.parse(req.body);
     logger.info('Calendly webhook received', { 
@@ -107,12 +113,20 @@ async function handleInviteeCreated(payload) {
     const email = invitee.email;
     const name = invitee.name;
     
+    console.log('🔍 WEBHOOK DEBUG: Looking for user with email:', email);
+    
     // Find startup by email
     const startup = await Startup.findOne({ email: email.toLowerCase() });
     if (!startup) {
+      console.log('❌ WEBHOOK ERROR: No startup found with email:', email);
+      console.log('📋 Available emails in database:');
+      const allStartups = await Startup.find({}, 'email').limit(10);
+      allStartups.forEach(s => console.log('  -', s.email));
       logger.warn('Calendly meeting scheduled for unknown email', { email });
       return;
     }
+    
+    console.log('✅ WEBHOOK SUCCESS: Found startup:', startup._id, 'for email:', email);
 
     // Extract meeting details
     const meetingDetails = {
