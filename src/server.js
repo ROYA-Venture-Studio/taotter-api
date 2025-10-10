@@ -79,7 +79,9 @@ const corsOptions = {
       'http://localhost:8080',
       'http://localhost:80',
       'https://leansprintr.com',
-      'https://www.leansprintr.com'
+      'https://www.leansprintr.com',
+      'https://www.stg.leansprintr.com',
+      'https://stg.leansprintr.com',
     ];
     
     // Allow requests with no origin (mobile apps, Postman, etc.)

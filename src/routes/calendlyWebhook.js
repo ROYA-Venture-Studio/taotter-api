@@ -26,15 +26,36 @@ const verifyCalendlySignature = (req, res, next) => {
     return res.status(401).json({ error: 'Request timestamp too old' });
   }
 
-  const payload = `${timestamp}.${JSON.stringify(req.body)}`;
+  // Calendly uses the raw body, not JSON stringified
+  const rawBody = req.body;
+  const payload = `${timestamp}.${rawBody}`;
+  
   const expectedSignature = crypto
     .createHmac('sha256', webhookSecret)
     .update(payload, 'utf8')
-    .digest('base64');
+    .digest('hex');
 
-  const providedSignature = signature.replace('t=', '').replace(/,.*/, '');
+  // Calendly signature format: t=<timestamp>,v1=<signature>
+  const signatureParts = signature.split(',');
+  let providedSignature = '';
+  
+  for (const part of signatureParts) {
+    if (part.startsWith('v1=')) {
+      providedSignature = part.substring(3);
+      break;
+    }
+  }
+
+  if (!providedSignature) {
+    return res.status(401).json({ error: 'No valid signature found' });
+  }
 
   if (expectedSignature !== providedSignature) {
+    logger.warn('Signature verification failed', {
+      expected: expectedSignature,
+      provided: providedSignature,
+      timestamp: timestamp
+    });
     return res.status(401).json({ error: 'Invalid webhook signature' });
   }
 
@@ -47,7 +68,11 @@ const verifyCalendlySignature = (req, res, next) => {
 router.post('/webhook', express.raw({ type: 'application/json' }), verifyCalendlySignature, async (req, res) => {
   try {
     const event = JSON.parse(req.body);
-    logger.info('Calendly webhook received', { event: event.event, payload: event.payload });
+    logger.info('Calendly webhook received', { 
+      event: event.event, 
+      created_at: event.created_at,
+      payload_keys: Object.keys(event.payload || {})
+    });
 
     // Handle different event types
     switch (event.event) {
@@ -70,7 +95,17 @@ router.post('/webhook', express.raw({ type: 'application/json' }), verifyCalendl
 
 async function handleInviteeCreated(payload) {
   try {
-    const { email, name, scheduled_event, questions_and_responses } = payload;
+    logger.info('Processing invitee.created event', { payload });
+    
+    const { invitee, event: scheduledEvent } = payload;
+    
+    if (!invitee || !scheduledEvent) {
+      logger.error('Missing required data in invitee.created payload', { payload });
+      return;
+    }
+
+    const email = invitee.email;
+    const name = invitee.name;
     
     // Find startup by email
     const startup = await Startup.findOne({ email: email.toLowerCase() });
@@ -81,13 +116,17 @@ async function handleInviteeCreated(payload) {
 
     // Extract meeting details
     const meetingDetails = {
-      calendlyEventId: scheduled_event.uri,
-      scheduledAt: new Date(scheduled_event.start_time),
-      meetingUrl: scheduled_event.location?.join_url || 'TBD',
+      calendlyEventId: scheduledEvent.uri,
+      inviteeUri: invitee.uri,
+      scheduledAt: new Date(scheduledEvent.start_time),
+      endTime: new Date(scheduledEvent.end_time),
+      meetingUrl: scheduledEvent.location?.join_url || 'TBD',
       attendeeName: name,
       attendeeEmail: email,
       status: 'scheduled',
-      eventName: scheduled_event.name
+      eventName: scheduledEvent.name,
+      timezone: invitee.timezone || 'UTC',
+      questionsAndResponses: invitee.questions_and_responses || []
     };
 
     // Update startup onboarding
@@ -105,22 +144,35 @@ async function handleInviteeCreated(payload) {
     try {
       await sendEmail({
         to: email,
-        template: 'meetingScheduled',
-        data: {
-          name: startup.profile?.founderFirstName || name,
-          meetingDate: new Date(scheduled_event.start_time).toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          }),
-          meetingTime: new Date(scheduled_event.start_time).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZoneName: 'short'
-          }),
-          meetingUrl: meetingDetails.meetingUrl
-        }
+        subject: '🎉 Your meeting is confirmed!',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2>Hi ${startup.profile?.founderFirstName || name}! 👋</h2>
+            
+            <p>Great news! Your discovery call with the Leansprintr team has been confirmed.</p>
+            
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h3>📅 Meeting Details:</h3>
+              <p><strong>Date:</strong> ${new Date(scheduledEvent.start_time).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}</p>
+              <p><strong>Time:</strong> ${new Date(scheduledEvent.start_time).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short'
+              })}</p>
+              <p><strong>Duration:</strong> 30 minutes</p>
+              ${meetingDetails.meetingUrl !== 'TBD' ? `<p><strong>Join URL:</strong> <a href="${meetingDetails.meetingUrl}">${meetingDetails.meetingUrl}</a></p>` : ''}
+            </div>
+            
+            <p>We're excited to learn more about your startup and discuss how Leansprintr can help accelerate your growth!</p>
+            
+            <p>Best regards,<br>The Leansprintr Team</p>
+          </div>
+        `
       });
     } catch (emailError) {
       logger.logError('Failed to send meeting confirmation email', emailError);
@@ -128,8 +180,9 @@ async function handleInviteeCreated(payload) {
 
     logger.info('Meeting scheduled successfully', { 
       email, 
-      meetingId: scheduled_event.uri,
-      startupId: startup._id 
+      meetingId: scheduledEvent.uri,
+      startupId: startup._id,
+      startTime: scheduledEvent.start_time
     });
 
   } catch (error) {
@@ -140,7 +193,16 @@ async function handleInviteeCreated(payload) {
 
 async function handleInviteeCanceled(payload) {
   try {
-    const { email, scheduled_event } = payload;
+    logger.info('Processing invitee.canceled event', { payload });
+    
+    const { invitee, event: scheduledEvent } = payload;
+    
+    if (!invitee || !scheduledEvent) {
+      logger.error('Missing required data in invitee.canceled payload', { payload });
+      return;
+    }
+
+    const email = invitee.email;
     
     // Find startup by email
     const startup = await Startup.findOne({ email: email.toLowerCase() });
@@ -157,16 +219,40 @@ async function handleInviteeCanceled(payload) {
       meetingDetails: {
         ...startup.onboarding.meetingDetails,
         status: 'canceled',
-        canceledAt: new Date()
+        canceledAt: new Date(),
+        cancelReason: invitee.cancel_reason || 'Not specified'
       },
       lastUpdated: new Date()
     };
 
     await startup.save();
 
+    // Send cancellation email
+    try {
+      await sendEmail({
+        to: email,
+        subject: 'Meeting Cancellation Confirmation',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2>Hi ${startup.profile?.founderFirstName || invitee.name}! 👋</h2>
+            
+            <p>We've received confirmation that your meeting has been canceled.</p>
+            
+            <p>No worries! You can reschedule at any time by visiting your dashboard and clicking the "Schedule Discovery Call" button again.</p>
+            
+            <p>We're still here to help accelerate your startup's growth whenever you're ready!</p>
+            
+            <p>Best regards,<br>The Leansprintr Team</p>
+          </div>
+        `
+      });
+    } catch (emailError) {
+      logger.logError('Failed to send meeting cancellation email', emailError);
+    }
+
     logger.info('Meeting canceled', { 
       email, 
-      meetingId: scheduled_event.uri,
+      meetingId: scheduledEvent.uri,
       startupId: startup._id 
     });
 
@@ -175,5 +261,35 @@ async function handleInviteeCanceled(payload) {
     throw error;
   }
 }
+
+// @route   GET /api/calendly/webhook/test
+// @desc    Test webhook endpoint (for debugging)
+// @access  Public
+router.get('/webhook/test', (req, res) => {
+  res.json({
+    message: 'Calendly webhook endpoint is accessible',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    webhookUrl: `${req.protocol}://${req.get('host')}/api/calendly/webhook`
+  });
+});
+
+// @route   POST /api/calendly/webhook/test
+// @desc    Test webhook processing (for debugging)
+// @access  Public
+router.post('/webhook/test', express.json(), async (req, res) => {
+  try {
+    logger.info('Test webhook received', { body: req.body, headers: req.headers });
+    res.json({
+      received: true,
+      body: req.body,
+      headers: req.headers,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.logError('Test webhook failed', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

@@ -5,6 +5,7 @@ const Admin = require('../models/Admin');
 const Startup = require('../models/Startup');
 const { authenticateAdmin, authenticateStartup } = require('../middleware/auth');
 const { AppError } = require('../middleware/errorHandler');
+const { sendEmail } = require('../utils/communications');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
@@ -253,6 +254,77 @@ router.post('/:chatId/message', authenticateAnyUser, upload.single('file'), asyn
     chat.messages.push(messageObj);
     chat.lastMessageAt = new Date();
     await chat.save();
+
+    // Send email notification when admin responds to startup (max 1 per 24 hours)
+    if (senderType === 'admin') {
+      try {
+        // Check if we've sent an email in the last 24 hours
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const lastEmailSent = chat.lastEmailNotificationAt;
+        
+        // Only send email if we haven't sent one in the last 24 hours
+        if (!lastEmailSent || lastEmailSent < twentyFourHoursAgo) {
+          // Get startup details for email
+          const startup = await Startup.findById(chat.startupId).select('email profile');
+          if (startup && startup.email) {
+            const startupName = startup.profile?.founderFirstName || 'there';
+            const companyName = startup.profile?.companyName || 'your startup';
+            
+            await sendEmail({
+              to: startup.email,
+              subject: '💬 New Message from Leansprintr Team',
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                  <div style="text-align: center; margin-bottom: 30px;">
+                    <img src="https://leansprintr.com/assets/logo/LeanSprintNewLogo.png" alt="Leansprintr" style="height: 40px;">
+                  </div>
+                  
+                  <h2 style="color: #333; margin-bottom: 20px;">Hi ${startupName}! 👋</h2>
+                  
+                  <p style="color: #666; line-height: 1.6; margin-bottom: 20px;">
+                    You have a new message from our team regarding ${companyName}.
+                  </p>
+                  
+                  <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                    <p style="color: #333; margin: 0; font-style: italic;">
+                      "${content && content.length > 100 ? content.substring(0, 100) + '...' : content || 'New message with attachment'}"
+                    </p>
+                  </div>
+                  
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="${process.env.FRONTEND_URL || 'https://app.leansprintr.com'}/startup/direct-chat" 
+                       style="background: #007bff; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block; font-weight: bold;">
+                      💬 View & Reply
+                    </a>
+                  </div>
+                  
+                  <p style="color: #666; font-size: 14px; line-height: 1.5; margin-top: 30px;">
+                    Best regards,<br>
+                    The Leansprintr Team
+                  </p>
+                  
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                  <p style="color: #999; font-size: 12px; text-align: center;">
+                    This email was sent because you have an active conversation with our team.
+                  </p>
+                </div>
+              `
+            });
+            
+            // Update the last email notification timestamp
+            chat.lastEmailNotificationAt = new Date();
+            await chat.save();
+            
+            console.log(`Email notification sent to startup: ${startup.email} for admin response (rate limited)`);
+          }
+        } else {
+          console.log(`Email notification skipped - sent recently (within 24 hours) for chat: ${chatId}`);
+        }
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        // Don't fail the request if email fails
+      }
+    }
 
     // Emit socket event for real-time update (consistent format with socketManager)
     try {
