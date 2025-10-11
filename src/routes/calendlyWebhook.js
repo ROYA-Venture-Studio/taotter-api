@@ -162,6 +162,8 @@ async function handleInviteeCreated(payload) {
       questionsAndResponses: invitee.questions_and_responses || []
     };
 
+    console.log('🔍 WEBHOOK DEBUG: Current startup onboarding BEFORE update:', JSON.stringify(startup.onboarding, null, 2));
+
     // Update startup onboarding
     startup.onboarding = {
       ...startup.onboarding,
@@ -171,11 +173,16 @@ async function handleInviteeCreated(payload) {
       lastUpdated: new Date()
     };
 
+    console.log('🔍 WEBHOOK DEBUG: New startup onboarding AFTER update:', JSON.stringify(startup.onboarding, null, 2));
+
     await startup.save();
 
+    // Verify the save worked
+    const updatedStartup = await Startup.findById(startup._id);
     console.log('✅ WEBHOOK SUCCESS: Database updated for startup:', startup._id);
-    console.log('   meetingScheduled:', startup.onboarding.meetingScheduled);
-    console.log('   currentStep:', startup.onboarding.currentStep);
+    console.log('   meetingScheduled:', updatedStartup.onboarding.meetingScheduled);
+    console.log('   currentStep:', updatedStartup.onboarding.currentStep);
+    console.log('   meetingDetails.status:', updatedStartup.onboarding.meetingDetails?.status);
 
     // Send confirmation email
     try {
