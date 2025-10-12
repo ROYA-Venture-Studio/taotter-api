@@ -286,7 +286,8 @@ function startSocketServer() {
         'http://localhost:8080',
         'http://localhost:80',
         'https://leansprintr.com',
-        'https://api-prod.leansprintr.com/'
+        'https://api-prod.leansprintr.com/',
+        'https://stg.leansprintr.com'
       ].filter(Boolean),
       credentials: true
     }
