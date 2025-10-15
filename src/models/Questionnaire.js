@@ -43,8 +43,8 @@ const questionnaireSchema = new mongoose.Schema({
       required: [true, 'Startup stage is required'],
       enum: [
         'pre-seed',
-        'seed-a',
-        'seed-b'
+        'seed',
+        'series-a-plus'
       ],
       index: true
     },

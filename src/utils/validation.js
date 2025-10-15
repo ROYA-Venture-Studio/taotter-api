@@ -107,8 +107,8 @@ const questionnaireSchemas = {
       taskDescription: Joi.string().trim().min(1).max(2000).required(),
       startupStage: Joi.string().valid(
         'pre-seed',
-        'seed-a',
-        'seed-b'
+        'seed',
+        'series-a-plus'
       ).required(),
       keyGoals: Joi.string().trim().min(1).max(1000).required(),
       timeCommitment: Joi.string().valid('full-time', 'part-time').required()
@@ -146,8 +146,8 @@ const questionnaireSchemas = {
       taskDescription: Joi.string().trim().min(1).max(2000).required(),
       startupStage: Joi.string().valid(
         'pre-seed',
-        'seed-a',
-        'seed-b'
+        'seed',
+        'series-a-plus'
       ).required(),
       keyGoals: Joi.string().trim().min(1).max(1000).required(),
       timeCommitment: Joi.string().valid('full-time', 'part-time').required()
@@ -181,8 +181,8 @@ const questionnaireSchemas = {
       taskDescription: Joi.string().trim().min(1).max(2000).optional(),
       startupStage: Joi.string().valid(
         'pre-seed',
-        'seed-a',
-        'seed-b'
+        'seed',
+        'series-a-plus'
       ).optional(),
       keyGoals: Joi.string().trim().min(1).max(1000).optional(),
       timeCommitment: Joi.string().valid('full-time', 'part-time').optional()

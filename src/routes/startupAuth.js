@@ -26,7 +26,7 @@ const registerSchema = Joi.object({
   phone: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).optional(),
   profile: Joi.object({
     founderFirstName: Joi.string().min(2).max(50).required(),
-    founderLastName: Joi.string().min(2).max(50).required(),
+    founderLastName: Joi.string().min(1).max(50).required(),
     companyName: Joi.string().max(100).optional()
   }).required()
 });
