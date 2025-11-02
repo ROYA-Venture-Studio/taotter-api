@@ -29,6 +29,7 @@ const taskCollaborationRoutes = require('./routes/task-collaboration');
 const chatRoutes = require('./routes/chat');
 const analyticsRoutes = require('./routes/analytics');
 const calendlyWebhookRoutes = require('./routes/calendlyWebhook');
+const voiceflowChatRoutes = require('./routes/voiceflowChat');
 
 const app = express();
 
@@ -214,6 +215,7 @@ app.use('/api/boards', boardsRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/task-collaboration', taskCollaborationRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/voiceflow-chat', voiceflowChatRoutes);
 app.use('/api/analytics', analyticsRoutes);
 // Calendly webhook moved BEFORE express.json() middleware
 
